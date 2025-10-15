@@ -1,12 +1,1 @@
-[
-  {
-    "ip": "127.0.0.1",
-    "name": "carlos",
-    "namespace": "UnB",
-    "observed_ip": "127.0.0.1",
-    "observed_port": 56715,
-    "port": 5555,
-    "timestamp": "2025-10-15T18:19:21.286682+00:00",
-    "ttl": 7200
-  }
-]
+[]

@@ -21,10 +21,10 @@ class State:
     def adiciona_conexao_ativa(self, peer_id: str, conexao):
         with self.lock:
             self.conexoes_ativas[peer_id] = conexao # adiciona a conexão ativa ao dicionário
-            print(f"[State] Conexão com {peer_id} adicionada. Conexões ativas: {len(self.active_connections)}")
+            print(f"[State] Conexão com {peer_id} adicionada. Conexões ativas: {len(self.conexoes_ativas)}")
 
     def remove_conexao_ativa(self, peer_id: str):
         with self.lock:
             if peer_id in self.conexoes_ativas:
                 del self.conexoes_ativas[peer_id] # remove a conexão ativa do dicionário
-                print(f"[State] Conexão com {peer_id} removida. Conexões ativas: {len(self.active_connections)}")            
+                print(f"[State] Conexão com {peer_id} removida. Conexões ativas: {len(self.conexoes_ativas)}")            

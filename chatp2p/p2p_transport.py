@@ -77,7 +77,7 @@ class PeerConnection(threading.Thread):
             print(f"[*] Recebido HELLO de {self.peer_id} em {self.endereco_peer}")
             
             resposta = {
-                type: "HELLO_OK",
+                "type": "HELLO_OK",
                 "peer_id": self.my_peer_id,
                 "version": VERSAO,
                 "features": FEATURES,

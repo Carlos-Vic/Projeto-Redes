@@ -7,48 +7,52 @@ from rendezvous_client import RendezvousClient
 from state import State
 from p2p_transport import PeerConnection
 
-SERVER_HOST = "127.0.0.1"
+SERVER_HOST = "192.168.1.2"
 SERVER_PORT = 8080
 
-MY_NAMESPACE = "UnB"
-MY_NAME = "carlos"
-MY_PORT = 5555
-MY_PEER_ID = f"{MY_NAME}@{MY_NAMESPACE}"
-
-app_state = State(MY_PEER_ID)
-rdzv_cliente = RendezvousClient(SERVER_HOST, SERVER_PORT)
-
-def escutar_peers():
+def escutar_peers(my_port, my_peer_id, app_state):
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     
-    server_socket.bind(('0.0.0.0', MY_PORT))
+    server_socket.bind(('0.0.0.0', my_port))
     server_socket.listen()
-    print(f"[*] Cliente escutando conexões na porta {MY_PORT}...")
+    print(f"[*] Cliente escutando conexões na porta {my_port}...")
     
     while True:
         client_socket, client_address = server_socket.accept()
         print(f"[+] Conexão recebida de {client_address}")
         
-        con = PeerConnection(client_socket, client_address, MY_PEER_ID, app_state)
+        con = PeerConnection(client_socket, client_address, my_peer_id, app_state)
         if con.handshake_nova_conexao():
             con.start()
         else:
             con.close() 
 
 
-def registro_periodico():
+def registro_periodico(rdzv_cliente, my_namespace, my_name, my_port):
     while True:
         print("Registrando no servidor de rendezvous...")
-        rdzv_cliente.register(MY_NAMESPACE, MY_NAME, MY_PORT)
+        rdzv_cliente.register(my_namespace, my_name, my_port)
         time.sleep(300)
 
 def main():
+    MY_NAME = input("Digite seu nome de usuário: ")
+    MY_NAMESPACE = input("Digite o namespace: ")
+    MY_PORT = int(input("Digite a porta para escutar conexões: "))
+    MY_PEER_ID = f"{MY_NAME}@{MY_NAMESPACE}"
+    
+    app_state = State(MY_PEER_ID)
+    rdzv_cliente = RendezvousClient(SERVER_HOST, SERVER_PORT)
+    
     print(f"[*] Cliente P2P iniciado como {MY_PEER_ID}")
-    listener_thread = threading.Thread(target=escutar_peers, daemon=True)
+    listener_thread = threading.Thread(target=escutar_peers, 
+                                       args= (MY_PORT, MY_PEER_ID, app_state), 
+                                       daemon=True)
     listener_thread.start()
     
-    registro_thread = threading.Thread(target=registro_periodico, daemon=True)
+    registro_thread = threading.Thread(target=registro_periodico,
+                                       args=(rdzv_cliente, MY_NAMESPACE, MY_NAME, MY_PORT),
+                                       daemon=True)
     registro_thread.start()
     
     time.sleep(1)  # Aguarda o listener iniciar
@@ -62,7 +66,7 @@ def main():
         comando = partes[0].lower()
         
         if comando == "/quit":
-            resposta = rdzv_cliente.unregister(MY_NAMESPACE, MY_NAME)
+            resposta = rdzv_cliente.unregister(MY_NAMESPACE, MY_NAME, MY_PORT)
             print("Saindo...")
             break
         
@@ -73,28 +77,28 @@ def main():
                 print(f"- {peer_id} (Visto em: {info['ip']}:{info['port']})")
                 
         elif comando == "/discover":
-            print("Descobrindo peers no namespace {MY_NAMESPACE}...")
+            print(f"Descobrindo peers no namespace {MY_NAMESPACE}...")
             resposta = rdzv_cliente.discover(MY_NAMESPACE)
             if resposta.get("status") == "OK":
                 peers = resposta.get("peers", [])
                 app_state.adiciona_peers_conhecidos(peers)
-                print("Descobertos {len(peers)} peers.")
+                print(f"Descobertos {len(peers)} peers.")
             else:
                 print("Erro ao descobrir peers: {resposta.get('message')}")
             
         elif comando == "/connect":
             if len(partes) < 2:
-                print("Uso: /connect <peer_id>")
+                print(f"Uso: /connect <peer_id>")
                 continue
             
             peer_id = partes[1]
             if peer_id == MY_PEER_ID:
-                print("Não é possível conectar a si mesmo.")
+                print(f"Não é possível conectar a si mesmo.")
                 continue
             
             peer_info = app_state.retorna_peers_conhecidos(peer_id)
             if not peer_info:
-                print("Peer {peer_id} não encontrado nos conhecidos. Use /discover primeiro.")
+                print(f"Peer {peer_id} não encontrado nos conhecidos. Use /discover primeiro.")
                 continue
             
             peer_ip = peer_info['ip']
