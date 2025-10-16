@@ -19,9 +19,9 @@ class PeerConnection(threading.Thread):
         self.is_running = True
         
     def envia_mensagem(self, mensagem: Dict[str, Any]):
-        if 'ttl' in mensagem:
-            ttl = mensagem.pop('ttl')
-            mensagem['ttl'] = ttl
+        if 'ttl' in mensagem: # preserva o campo ttl se existir
+            ttl = mensagem.pop('ttl') # remove o campo ttl temporariamente
+            mensagem['ttl'] = ttl # adiciona o campo ttl de volta no início do dicionário
             
         json_msg = json.dumps(mensagem).encode('utf-8') + b'\n'
         if len(json_msg) > TAMANHO_MAX:
@@ -30,68 +30,74 @@ class PeerConnection(threading.Thread):
         
         self.sock.sendall(json_msg)
         
-    def handshake(self):
-        requisicao = {
+    def faz_handshake(self):
+        requisicao_hello = {
             "type": "HELLO",
             "peer_id": self.my_peer_id,
             "version": VERSAO,
             "features": FEATURES,
             "ttl": 1
-        }
+        }      
+        self.envia_mensagem(requisicao_hello)
         
-        self.envia_mensagem(requisicao)
-        
-        self.sock.settimeout(10.0)
-        
-        resposta_data = self.sock.recv(TAMANHO_MAX)
-        if not resposta_data:
-            print("[Erro] Nenhuma resposta recebida durante o handshake.")
-            return False
-        
-        resposta = json.loads(resposta_data.decode('utf-8').strip())
-        
-        if resposta.get("type") == "HELLO_OK":
-            self.peer_id = resposta.get("peer_id")
-            print(f"[Handshake] Conexão estabelecida com {self.peer_id} em {self.endereco_peer}")
-            self.state.adiciona_conexao_ativa(self.peer_id, self)
-            return True
-        else:
-            print(f"[Erro] Handshake falhou com {self.endereco_peer}: {resposta}")
-            return False
-        
-        self.sock.settimeout(None)
-        
-    
-    def handshake_nova_conexao(self):
-        self.sock.settimeout(10.0)
-        
-        data = self.sock.recv(TAMANHO_MAX)
-        if not data:
-            print("[Erro] Nenhuma mensagem recebida durante o handshake.")
-            return False
-        
-        mensagem = json.loads(data.decode('utf-8').strip())
-        
-        if mensagem.get("type") == "HELLO":
-            self.peer_id = mensagem.get("peer_id")
-            print(f"[*] Recebido HELLO de {self.peer_id} em {self.endereco_peer}")
+        try:     
+            self.sock.settimeout(10.0) # timeout de 10 segundos
+            resposta = self.sock.recv(TAMANHO_MAX) # espera pela resposta
+            self.sock.settimeout(None) # remove o timeout após receber a resposta
             
-            resposta = {
-                "type": "HELLO_OK",
-                "peer_id": self.my_peer_id,
-                "version": VERSAO,
-                "features": FEATURES,
-                "ttl": 1
-            }
-            self.envia_mensagem(resposta)
-            print(f"[Handshake] Conexão estabelecida com {self.peer_id} em {self.endereco_peer}")
-            self.state.adiciona_conexao_ativa(self.peer_id, self)
-            return True
-        else:
-            print(f"[Erro] Mensagem inesperada durante o handshake de {self.endereco_peer}: {mensagem}")
+            if not resposta: 
+                    print("[Erro Handshake] Conexão fechada antes do HELLO_OK.")
+                    return False
+                
+            resposta_msg = json.loads(resposta.decode('utf-8').strip()) # decodifica a resposta
+                
+            if resposta_msg.get("type") == "HELLO_OK":
+                 self.peer_id = resposta_msg.get("peer_id")
+                 print(f"[Handshake] Conexão estabelecida com {self.peer_id} em {self.endereco_peer}")
+                 self.state.adiciona_conexao_ativa(self.peer_id, self) # adiciona a conexão ativa ao estado
+                 return True
+            else:
+                print(f"[Erro Handshake] Resposta inesperada recebida {resposta_msg}")
+                return False
+            
+        except socket.timeout:
+            print("[Erro Handshake] Timeout ao esperar pela resposta do handshake.")
+            return False       
+               
+    
+    def recebe_handshake(self):
+        try:
+            self.sock.settimeout(10.0) # timeout de 10 segundos
+            data = self.sock.recv(TAMANHO_MAX) # espera pela mensagem de handshake
+            self.sock.settimeout(None) # remove o timeout após receber a mensagem
+            
+            if not data:
+                print(f"[Erro Handshake] Peer {self.endereco_peer} desconectou antes de enviar o HELLO.")
+                return False
+            
+            mensagem = json.loads(data.decode('utf-8').strip()) # decodifica a mensagem
+            
+            if mensagem.get("type") == "HELLO":
+                self.peer_id = mensagem.get("peer_id")
+                print(f"[Handshake] Recebido HELLO de {self.peer_id} em {self.endereco_peer}")
+                
+                resposta_hello_ok = {
+                    "type": "HELLO_OK",
+                    "peer_id": self.my_peer_id,
+                    "version": VERSAO,
+                    "features": FEATURES,
+                    "ttl": 1
+                }               
+                self.envia_mensagem(resposta_hello_ok)
+                print(f"[Handshake] Enviado HELLO_OK para {self.peer_id}")
+                self.state.adiciona_conexao_ativa(self.peer_id, self) # adiciona a conexão ativa ao estado
+                return True
+            else:
+                print(f"[Erro Handshake] Mensagem inesperada recebida: {mensagem}")
+                return False
+        except socket.timeout:
+            print("[Erro Handshake] Timeout ao esperar pela mensagem de handshake.")
             return False
-        
-        self.sock.settimeout(None)
     
     def run(self):
         buffer = ""

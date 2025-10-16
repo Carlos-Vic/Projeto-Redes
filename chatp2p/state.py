@@ -7,6 +7,7 @@ class State:
         self.conexoes_ativas = {} # dicionário para armazenar conexões ativas
         self.lock = threading.Lock() # lock para garantir acesso thread-safe
     
+    # Adiciona uma lista de peers conhecidos ao dicionário
     def adiciona_peers_conhecidos(self, peers: list):
         with self.lock:
             for peer_info in peers:
@@ -14,15 +15,19 @@ class State:
                 if peer_id != self.my_peer_id: # evita adicionar ele mesmo na lista de peers conhecidos
                     self.peers_conhecidos[peer_id] = peer_info
     
+    # Retorna as informações de um peer conhecido dado seu peer_id	
     def retorna_peers_conhecidos(self, peer_id: str):
         with self.lock:
-           return self.peers_conhecidos.get(peer_id) # retorna as informações do peer_id solicitado ou None se não existir
+           return self.peers_conhecidos.get(peer_id) # retorna as informações do peer_id solicitado
     
+    
+    # Adiciona uma conexão ativa ao dicionário
     def adiciona_conexao_ativa(self, peer_id: str, conexao):
         with self.lock:
             self.conexoes_ativas[peer_id] = conexao # adiciona a conexão ativa ao dicionário
             print(f"[State] Conexão com {peer_id} adicionada. Conexões ativas: {len(self.conexoes_ativas)}")
 
+    # Remove uma conexão ativa do dicionário
     def remove_conexao_ativa(self, peer_id: str):
         with self.lock:
             if peer_id in self.conexoes_ativas:
