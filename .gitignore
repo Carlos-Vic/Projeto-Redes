@@ -4,6 +4,8 @@ venv/
 
 # Arquivos de cache do Python
 __pycache__/
+chatp2p/__pycache__/
+pyp2p-rdv/src/rendezvous/__pycache__/
 *.py[cod]
 *$py.class
 

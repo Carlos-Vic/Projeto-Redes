@@ -56,19 +56,22 @@ class RendezvousClient:
             requisicao["ttl"] = ttl
         return self._envia_e_recebe_requisicao(requisicao)
     
-    def discover(self, namespace: str):
+    def discover(self, namespace: None):
         requisicao = {
-            "type": "DISCOVER",
-            "namespace": namespace
+            "type": "DISCOVER",        
         }
+        if namespace is not None:
+            requisicao["namespace"] = namespace
         return self._envia_e_recebe_requisicao(requisicao)
     
-    def unregister(self, namespace: str, name: str, port: int):
+    def unregister(self, namespace: str, name: None, port: None):
         requisicao = {
             "type": "UNREGISTER",
             "namespace": namespace,
-            "name": name,
-            "port": port
         }
+        if name is not None:
+            requisicao["name"] = name
+        if port is not None:
+            requisicao["port"] = port
         return self._envia_e_recebe_requisicao(requisicao)
         

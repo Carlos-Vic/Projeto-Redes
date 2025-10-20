@@ -26,7 +26,7 @@ class CLI:
                 self._handle_disconnect()
                 break
             elif comando == "/peers":
-                self._handle_peers()
+                self._handle_peers(partes)
             elif comando == "/connect":
                 self._handle_connect(partes)
             else:
@@ -38,18 +38,30 @@ class CLI:
         self.rdzv_cliente.unregister(info['namespace'], info['name'], info['port'])
         log.info(f"Desconectado {info['peer_id']}.")
     
-    def _handle_peers(self):
-        log.info(f"Buscando peers no namespace '{self.my_info['namespace']}'...")
+    def _handle_peers(self, partes):
+        namespace = None
+        log_message = ""
         
-        resposta = self.rdzv_cliente.discover(self.my_info['namespace'])
+        if len(partes) == 1:
+            namespace = None
+            log_message = "Buscando peers em todos os namespaces..."
+        else:
+            namespace = partes[1]
+            log_message = f"Buscando peers no namespace '{namespace}'..."
+        log.info(log_message)
+        
+        resposta = self.rdzv_cliente.discover(namespace)
         peers = resposta.get("peers", [])
+        
         self.app_state.adiciona_peers_conhecidos(peers)
         
-        if not self.app_state.peers_conhecidos:
-            log.info("Nenhum peer encontrado no namespace.")
+        if not peers:
+            log.info("Nenhum peer encontrado.")
         else:
-            for peer_id, info in self.app_state.peers_conhecidos.items():
-                log.info(f"- {peer_id} em:{info['port']}")
+            for peer in peers:
+                peer_id = f"{peer['name']}@{peer['namespace']}"
+                if peer_id != self.my_info['peer_id']:
+                    log.info(f"Peer encontrado: {peer_id} em {peer['ip']}:{peer['port']}")
     
     def _handle_connect(self, partes):
         if len(partes) < 2:

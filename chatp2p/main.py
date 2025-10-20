@@ -10,7 +10,7 @@ from p2p_transport import PeerConnection
 from cli import CLI
 from logger import setup_logging
 
-SERVER_HOST = "192.168.1.2"
+SERVER_HOST = "127.0.0.1"
 SERVER_PORT = 8080
 
 log = logging.getLogger(__name__)
@@ -33,22 +33,15 @@ def escutar_peers(my_port, my_peer_id, app_state):
         else:
             con.close() 
 
-
-def registro_periodico(rdzv_cliente, my_namespace, my_name, my_port):
-    while True:
-        log.info("Mantendo registro no servidor de rendezvous...")
-        rdzv_cliente.register(my_namespace, my_name, my_port, ttl=360)
-        time.sleep(300)
-
-def atualizacao_automatica_peers(rdzv_cliente, my_namespace, app_state):
+def atualizacao_automatica_peers(rdzv_cliente, app_state):
     time.sleep(10)  # Aguarda 10 segundos antes da primeira atualização
     while True:
         try:
-            resposta = rdzv_cliente.discover(my_namespace)
+            resposta = rdzv_cliente.discover(None)
             peers = resposta.get("peers", [])
             app_state.adiciona_peers_conhecidos(peers)
         except RendezvousError as e:
-            print(f"[Erro Debug] Falha ao atualizar peers automaticamente: {e}")
+            log.warning(f"Falha ao atualizar lista de peers: {e}")
         time.sleep(60)  # Atualiza a lista de peers a cada 60 segundos
 
 def main():
@@ -57,11 +50,21 @@ def main():
     nome = input("Digite seu nome: ")
     namespace = input("Digite o namespace: ")
     porta = int(input("Digite a porta para escutar (ex: 5000): "))
+    ttl = None
+    while True:
+        ttl_string = input("Digite o TTL em segundos (ou deixe vazio para padrão): ")   
+        if not ttl_string:
+            ttl = None
+            break
+        else:
+            ttl = int(ttl_string)
+            break
     
     my_info = {
         "name": nome,
         "namespace": namespace,
         "port": porta,
+        "ttl": ttl,
         "peer_id": f"{nome}@{namespace}"
     }
     
@@ -70,7 +73,7 @@ def main():
     
     try:
         log.info("Registrando no servidor de rendezvous...")
-        rdzv_cliente.register(my_info['namespace'], my_info['name'], my_info['port'], ttl=360)
+        rdzv_cliente.register(my_info['namespace'], my_info['name'], my_info['port'], my_info['ttl'])
         log.info(f"Registrado como {my_info['peer_id']} na porta {my_info['port']}.")
     except RendezvousError as e:
         log.error(f"Falha ao registrar no servidor de rendezvous: {e}")
@@ -78,8 +81,7 @@ def main():
     
     threads = [
         threading.Thread(target=escutar_peers, args=(my_info['port'], my_info['peer_id'], app_state), daemon=True),
-        threading.Thread(target=registro_periodico, args=(rdzv_cliente, my_info['namespace'], my_info['name'], my_info['port']), daemon=True),
-        threading.Thread(target=atualizacao_automatica_peers, args=(rdzv_cliente, my_info['namespace'], app_state), daemon=True)
+        threading.Thread(target=atualizacao_automatica_peers, args=(rdzv_cliente, app_state), daemon=True)
     ]
     for t in threads:
         t.start()
