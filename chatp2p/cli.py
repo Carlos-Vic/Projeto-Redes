@@ -60,8 +60,7 @@ class CLI:
         else:
             for peer in peers:
                 peer_id = f"{peer['name']}@{peer['namespace']}"
-                if peer_id != self.my_info['peer_id']:
-                    log.info(f"Peer encontrado: {peer_id} em {peer['ip']}:{peer['port']}")
+                log.info(f"Peer encontrado: {peer_id} em {peer['ip']}:{peer['port']}")
     
     def _handle_connect(self, partes):
         if len(partes) < 2:

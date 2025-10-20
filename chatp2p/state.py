@@ -10,10 +10,11 @@ class State:
     # Adiciona uma lista de peers conhecidos ao dicionário
     def adiciona_peers_conhecidos(self, peers: list):
         with self.lock:
+            self.peers_conhecidos.clear()
             for peer_info in peers:
-                peer_id = f"{peer_info['name']}@{peer_info['namespace']}" # monta o peer_id
-                if peer_id != self.my_peer_id: # evita adicionar ele mesmo na lista de peers conhecidos
-                    self.peers_conhecidos[peer_id] = peer_info
+                peer_id = f"{peer_info['name']}@{peer_info['namespace']}"
+                self.peers_conhecidos[peer_id] = peer_info
+                
     
     # Retorna as informações de um peer conhecido dado seu peer_id	
     def retorna_peers_conhecidos(self, peer_id: str):
