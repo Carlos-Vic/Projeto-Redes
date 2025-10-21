@@ -61,34 +61,3 @@ class CLI:
             for peer in peers:
                 peer_id = f"{peer['name']}@{peer['namespace']}"
                 log.info(f"Peer encontrado: {peer_id} em {peer['ip']}:{peer['port']}")
-    
-    def _handle_connect(self, partes):
-        if len(partes) < 2:
-            log.warning("Uso: /connect <peer_id>")
-            return
-        
-        peer_id = partes[1]
-        if peer_id == self.my_info['peer_id']:
-            log.warning("Não é possível conectar a si mesmo.")
-            return
-        
-        peer_info = self.app_state.retorna_peers_conhecidos(peer_id)
-        if not peer_info:
-            log.error()(f"Peer {peer_id} não encontrado nos conhecidos. Use /peers para atualizar a lista.")
-
-        
-        peer_ip = peer_info['ip']
-        peer_port = peer_info['port']
-            
-        log.info(f"Conectando a {peer_id} em {peer_ip}:{peer_port}...")
-            
-        cliente_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        cliente_socket.connect((peer_ip, peer_port))
-        
-        con = PeerConnection(cliente_socket, (peer_ip, peer_port), self.my_info['peer_id'], self.app_state)
-        
-        if con.faz_handshake():
-            con.start()
-        else:
-            log.error(f"Falha no handshake com {peer_id}.")
-            con.stop()       

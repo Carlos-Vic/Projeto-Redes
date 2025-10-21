@@ -44,6 +44,46 @@ def atualizacao_automatica_peers(rdzv_cliente, app_state):
             log.warning(f"Falha ao atualizar lista de peers: {e}")
         time.sleep(60)  # Atualiza a lista de peers a cada 60 segundos
 
+def gerencia_conexoes_ativas(my_peer_id, app_state):
+    intervalo_verificacao = 30
+    
+    while True:
+        time.sleep(intervalo_verificacao)
+        
+        log.debug("[Gerenciador] Verificando conexões ativas...")
+        with app_state.lock:
+            peers_conhecidos_copia = dict(app_state.peers_conhecidos)
+            conexoes_ativas_copia = dict(app_state.conexoes_ativas)
+            
+        peers_para_conectar = []
+        for peer_id, peer_info in peers_conhecidos_copia.items():
+            if peer_id == my_peer_id:
+                continue
+            if peer_id in conexoes_ativas_copia:
+                continue
+            
+            peers_para_conectar.append((peer_id, peer_info))
+            
+            log.debug(f"[Gerenciador] Tentando conectar automaticamente com {len(peers_para_conectar)} peers...")
+            
+            for peer_id, peer_info in peers_para_conectar:
+                with app_state.lock:
+                    if peer_id in app_state.conexoes_ativas:
+                        continue
+                
+                peer_ip = peer_info['ip']
+                peer_port = peer_info['port']
+                
+                cliente_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                cliente_socket.settimeout(10)
+                cliente_socket.connect((peer_ip, peer_port))
+                
+                conn = PeerConnection(cliente_socket, (peer_ip, peer_port), my_peer_id, app_state)
+                if conn.faz_handshake():
+                    conn.start()
+                else:
+                    conn.stop()
+                      
 def main():
     setup_logging()
     
@@ -81,7 +121,8 @@ def main():
     
     threads = [
         threading.Thread(target=escutar_peers, args=(my_info['port'], my_info['peer_id'], app_state), daemon=True),
-        threading.Thread(target=atualizacao_automatica_peers, args=(rdzv_cliente, app_state), daemon=True)
+        threading.Thread(target=atualizacao_automatica_peers, args=(rdzv_cliente, app_state), daemon=True),
+        threading.Thread(target=gerencia_conexoes_ativas, args=(my_info['peer_id'], app_state), daemon=True, name="AutoConnector")
     ]
     for t in threads:
         t.start()
