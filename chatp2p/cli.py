@@ -27,8 +27,6 @@ class CLI:
                 break
             elif comando == "/peers":
                 self._handle_peers(partes)
-            elif comando == "/connect":
-                self._handle_connect(partes)
             else:
                 log.warning(f"Comando desconhecido: {comando}")
 
