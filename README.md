@@ -9,26 +9,9 @@ Este projeto implementa uma aplicação de chat peer-to-peer (P2P) em Python. Os
 
 ## Como Executar
 
-A execução envolve dois componentes principais: o Servidor Rendezvous (ponto de encontro) e o Cliente Chat P2P (a aplicação de chat em si).
+### 1. Executando o Cliente Chat P2P
 
-### 1. Executando o Servidor Rendezvous (Localmente)
-
-**Nota:** Este passo é necessário apenas enquanto o professor não disponibiliza o IP do servidor dele.
-
-1.  Abra um terminal.
-2.  Navegue até a pasta do código do servidor Rendezvous:
-    ```bash
-    cd .\pyp2p-rdv\src\rendezvous\
-    ```
-3.  Execute o script principal do servidor:
-    ```bash
-    python .\main.py
-    ```
-    O servidor começará a escutar por conexões (por padrão, na porta 8080). Mantenha este terminal aberto.
-
-### 2. Executando o Cliente Chat P2P
-
-1.  Abra um **novo** terminal (mantenha o terminal do servidor rodando, se aplicável).
+1.  Abra um terminal
 2.  Navegue até a pasta do código do cliente Chat P2P:
     ```bash
     cd .\chatp2p\
