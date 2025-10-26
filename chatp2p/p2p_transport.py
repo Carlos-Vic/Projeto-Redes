@@ -2,7 +2,7 @@ import socket
 import json
 import threading
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from state import State
 
 VERSAO = "1.0"
@@ -11,7 +11,7 @@ TAMANHO_MAX = 32768  # 32 KiB
 
 log = logging.getLogger(__name__)
 class PeerConnection(threading.Thread):
-    def __init__(self, sock: socket.socket, endereco_peer: tuple, my_peer_id: str, app_state: State, peer_id: str = None):
+    def __init__(self, sock: socket.socket, endereco_peer: tuple, my_peer_id: str, app_state: State, peer_id: Optional[str] = None):
         super().__init__(daemon=True)
         self.sock = sock
         self.endereco_peer = endereco_peer
@@ -23,7 +23,7 @@ class PeerConnection(threading.Thread):
     def envia_mensagem(self, mensagem: Dict[str, Any]):
         if 'ttl' in mensagem: # preserva o campo ttl se existir
             ttl = mensagem.pop('ttl') # remove o campo ttl temporariamente
-            mensagem['ttl'] = ttl # adiciona o campo ttl de volta no início do dicionário
+            mensagem['ttl'] = ttl # adiciona o campo ttl de volta no fim do dicionário
             
         json_msg = json.dumps(mensagem).encode('utf-8') + b'\n'
         logging.debug(f"[Envio Mensagem] Enviando para {self.peer_id}: {mensagem}")

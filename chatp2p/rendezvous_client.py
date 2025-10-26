@@ -2,7 +2,7 @@
 import socket
 import json
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 log = logging.getLogger(__name__)
 
@@ -45,7 +45,7 @@ class RendezvousClient:
     """ 
     Métodos públicos para registrar, descobrir e desregistrar peers 
     """	 
-    def register(self, namespace: str, name: str, port: int, ttl: int = None):
+    def register(self, namespace: str, name: str, port: int, ttl: Optional[int] = None):
         requisicao = {
             "type": "REGISTER",
             "namespace": namespace,
