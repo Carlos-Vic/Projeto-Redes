@@ -10,7 +10,7 @@ from p2p_transport import PeerConnection
 from cli import CLI
 from logger import setup_logging
 
-SERVER_HOST = "127.0.0.1"
+SERVER_HOST = "pyp2p.mfcaetano.cc"
 SERVER_PORT = 8080
 
 log = logging.getLogger(__name__)

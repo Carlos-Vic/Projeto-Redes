@@ -126,12 +126,12 @@ class PeerConnection(threading.Thread):
             
             self.stop()
             
-        def stop(self):
-            self.is_running = False
-            if self.peer_id:
-                self.state.remove_conexao_ativa(self.peer_id)
-            if self.sock:
-                self.sock.close()
+    def stop(self):
+        self.is_running = False
+        if self.peer_id:
+            self.state.remove_conexao_ativa(self.peer_id)
+        if self.sock:
+           self.sock.close()
                     
                     
                     
