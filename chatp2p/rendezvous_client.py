@@ -112,7 +112,7 @@ def register(state, retry: bool = True) -> Dict[str, Any]:
     }
     
     # Obtém as configurações de retry
-    max_tentativas = state.get_config("rendezvous", "register_retry_atttempts") # Número máximo de tentativas
+    max_tentativas = state.get_config("rendezvous", "register_retry_attempts") # Número máximo de tentativas
     backoof_base = state.get_config("rendezvous", "register_backoff_base") # Base do backoff exponencial
         
     ultima_excecao = None
