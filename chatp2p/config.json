@@ -1,0 +1,35 @@
+{
+    "rendezvous" : {
+        "host": "pyp2p.mfcaetano.cc", 
+        "port": 8080,
+        "discover_interval" : 60,
+        "register_retry_attempts" : 3,
+        "register_backoff_base" : 2,
+        "ttl_warning_treshold" : 60
+
+    },
+
+    "network": {
+        "ack_timeout" : 20,
+        "max_msg_size": 32768,
+        "connection_timeout" : 30,
+    },
+
+    "reconnection": {
+        "max_attempts" : 5,
+        "backoff_base" : 2,
+        "backoff_max" : 32,
+        "check_interval" : 10
+    },
+
+    "keepalive": {
+        "ping_interval" : 30,
+        "ping_timeout" : 10,
+        "max_ping_failures" : 3
+    },
+    "logging": {
+        "level" : "INFO",
+        "log_to_file" : true,
+        "file" : "chatp2p.log"
+    }
+}
