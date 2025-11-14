@@ -1,8 +1,11 @@
 import threading
 import json
+import logging
 from pathlib import Path
 from typing import Dict, Any, Optional
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 class State:
     def __init__(self, config_path: str = "config.json"):
@@ -57,11 +60,17 @@ class State:
             tempo_restante = self.ttl - tempo_passado
             return max(0, int(tempo_restante))
     
+    def adiciona_conexao(self, peer_id: str, conexao):
+        with self._lock:
+            self._conexoes[peer_id] = conexao
+            logger.info(f"[State] Conexão adicionada: {peer_id}")
+    
     # Função para remover uma conexão do dicionário de conexões ativas
     def remove_conexao(self, peer_id: str):
         with self._lock:
             if peer_id in self._conexoes:
                 del self._conexoes[peer_id]
+                logger.info(f"[State] Conexão removida: {peer_id}")
     
     # Função get para obter conexão com um peer específico 
     def get_conexao(self, peer_id: str):
