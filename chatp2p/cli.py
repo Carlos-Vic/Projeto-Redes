@@ -1,61 +1,177 @@
-import logging
-import socket
-from rendezvous_client import RendezvousError
-from p2p_transport import PeerConnection
+from state import State
+from rendezvous_client import *
 
-log = logging.getLogger(__name__)
 
 class CLI:
-    def __init__(self, rdzv_cliente, app_state, my_info):
-        self.rdzv_cliente = rdzv_cliente
-        self.app_state = app_state
-        self.my_info = my_info
-        
-    def run(self):
-        
-        
-        while True:
-            linha_cmd = input("> ").strip()
-            if not linha_cmd:
-                continue
-                
-            partes = linha_cmd.split(" ", 1)
-            comando = partes[0].lower()
-                
-            if comando == "/quit":
-                self._handle_disconnect()
-                break
-            elif comando == "/peers":
-                self._handle_peers(partes)
-            else:
-                log.warning(f"Comando desconhecido: {comando}")
-
-    def _handle_disconnect(self):
-        log.info("Desconectando...")
-        info = self.my_info
-        self.rdzv_cliente.unregister(info['namespace'], info['name'], info['port'])
-        log.info(f"Desconectado {info['peer_id']}.")
+    def __init__(self, config_path: str = "config.json"):
+        self.config_path = config_path
+        self.state = None
+        self.registrado = False
     
-    def _handle_peers(self, partes):
-        namespace = None
-        log_message = ""
+    
+    def cmd_setup(self):
+        try:
+            self.state = State(self.config_path)
+            
+            namespace = input("Digite o namespace: ").strip()
+            if not namespace:
+                print("Namespace não pode ser vazio.")
+                return
+            
+            name = input("Digite seu nome: ").strip()
+            if not name:
+                print("Nome não pode ser vazio.")
+                return
+            
+            porta = int(input("Digite a porta para escutar (ex: 5000): "))
+
+            ttl = input("Digite o TTL em segundos (ou deixe vazio para padrão 7200): ").strip()
+            if ttl:
+                ttl = int(ttl)
+            else:
+                ttl = 7200 
         
-        if len(partes) == 1:
-            namespace = None
-            log_message = "Buscando peers em todos os namespaces..."
+                
+            self.state.set_peer_info(name, namespace, porta, ttl)
+            
+            print(f"Peer ID definido como: {self.state.get_peer_info()}")
+            print(f"Porta definida como: {self.state.port}")
+            print(f"TTL definida como: {self.state.ttl} segundos")
+        
+        except Exception as e:
+            print(f"Falha ao configurar o estado: {e}")
+        
+    
+    def cmd_registrar(self):
+        if not self.state:
+            print("Estado não inicializado. Execute setup() primeiro.")
+            return
+        
+        print("Registrando no servidor de rendezvous...")
+        
+        try:
+            resposta = register(self.state)
+            self.registrado = True
+            print(f"Registrado com sucesso")
+            print(f"Status: {resposta.get('status')}")
+            
+        except RendezvousError as e:
+            print(f"Falha ao registrar no servidor de rendezvous: {e}")
+            
+    
+    def cmd_discover(self, args):
+        if not self.state:
+            print("Estado não inicializado. Execute setup primeiro.")
+            return
+
+        # args é uma lista: [] se sem argumentos, ['namespace'] se com argumento
+        namespace = args[0] if args else None
+
+        if namespace:
+            print(f"Descobrindo peers no namespace '{namespace}'...")
         else:
-            namespace = partes[1]
-            log_message = f"Buscando peers no namespace '{namespace}'..."
-        log.info(log_message)
-        
-        resposta = self.rdzv_cliente.discover(namespace)
-        peers = resposta.get("peers", [])
-        
-        self.app_state.adiciona_peers_conhecidos(peers)
-        
-        if not peers:
-            log.info("Nenhum peer encontrado.")
-        else:
+            print("Descobrindo peers em todos os namespaces...")
+            
+        try:
+            peers = discover(self.state, namespace=namespace)
+            
+            if not peers:
+                print("Nenhum peer encontrado.")
+                return
+            
+            print(f"Total de peers encontrados ({len(peers)}):")
+            
+            por_namespace = {}
             for peer in peers:
-                peer_id = f"{peer['name']}@{peer['namespace']}"
-                log.info(f"Peer encontrado: {peer_id} em {peer['ip']}:{peer['port']}")
+                ns = peer.get("namespace", "unknown")
+                if ns not in por_namespace:
+                    por_namespace[ns] = []
+                por_namespace[ns].append(peer)
+                
+            for ns in sorted(por_namespace.keys()):
+                print(f"[{ns}]")
+                for peer in por_namespace[ns]:
+                    peer_id = f"{peer.get('name')}@{peer.get('namespace')}"
+                    ip = peer.get("ip")
+                    porta = peer.get("port")
+                    print(f" - {peer_id} ({ip}:{porta})")
+                print()
+                
+        except RendezvousError as e:
+            print(f"Falha ao descobrir peers: {e}")
+    
+    def cmd_unregister(self):
+        if not self.state:
+            print("Estado não inicializado. Execute setup primeiro.")
+            return
+        
+        if not self.registrado:
+            print("Peer não registrado. Execute registrar() primeiro.")
+            return
+        
+        print("Desregistrando do servidor de rendezvous...")
+        
+        try:
+            resposta = unregister(self.state)
+            self.registrado = False
+            print(f"Desregistrado com sucesso")
+            print(f"Status: {resposta.get('status')}")
+            print()
+            
+        except RendezvousError as e:
+            print(f"Falha ao desregistrar do servidor de rendezvous: {e}")
+            
+    def processa_comando(self, comando):
+
+        if not comando.strip():
+            return True
+
+        partes = comando.strip().split()
+        cmd = partes[0].lower()
+        args = partes[1:]
+
+        if cmd in ['quit', 'exit']:
+            return False
+        elif cmd == 'setup':
+            self.cmd_setup()
+        elif cmd == 'registrar':
+            self.cmd_registrar()
+        elif cmd == 'discover':
+            self.cmd_discover(args)
+        elif cmd == 'unregister':
+            self.cmd_unregister()
+
+        else:
+            print(f"Comando desconhecido: {cmd}")
+
+        return True
+        
+    def limpar(self):
+        if self.registrado and self.state:
+            print("Removendo registro antes de sair...")
+            try:
+                unregister(self.state)
+                print("Registro removido com sucesso.")
+            except Exception as e:
+                print(f"Falha ao remover registro: {e}")
+    
+    def run(self):
+        print("Bem-vindo ao chat P2P!")
+        print("Digite 'setup' para começar.")
+        
+        try:
+            while True:
+               try:
+                    comando = input("rendezvous> ")
+                    if not self.processa_comando(comando):
+                        break
+               except EOFError:
+                   print("\n")
+                   break
+               
+        except (KeyboardInterrupt, EOFError):
+            print("\nSaindo...")
+        
+        finally:
+            self.limpar()
+            print("Até logo!")
