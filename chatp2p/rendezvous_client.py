@@ -1,7 +1,8 @@
 import socket
 import json
 import logging
-from typing import Dict, Any, Optional, Any
+import time
+from typing import Dict, Any, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -88,3 +89,106 @@ def _envia_comando(host: str, port: int, command: Dict[str, Any], timeout: int =
                 logger.debug(f"[Rendezvous] Conexão fechada")
             except Exception:
                 pass
+
+def register(state, retry: bool = True) -> Dict[str, Any]:
+    # Obtém as configurações no state
+    host = state.get_config("rendezvous", "host")
+    porta = state.get_config("rendezvous", "port")
+    timeout = state.get_config("network", "connection_timeout")
+    
+    # Define o TTL padrão (7200) se usuário não especificou
+    if state.ttl is None:
+        ttl = 7200
+    else:
+        ttl = state.ttl
+          
+    # dicionário com o comando REGISTER
+    comando = {
+        "type": "REGISTER",
+        "namespace": state.namespace,
+        "name": state.name,
+        "port": state.port,
+        "ttl": ttl
+    }
+    
+    # Obtém as configurações de retry
+    max_tentativas = state.get_config("rendezvous", "register_retry_atttempts") # Número máximo de tentativas
+    backoof_base = state.get_config("rendezvous", "register_backoff_base") # Base do backoff exponencial
+        
+    ultima_excecao = None
+    
+    for tentativas in range(max_tentativas): # Loop de tentativas
+        try:
+            logger.debug(f"[Rendezvous] Tentando REGISTER (tentativa {tentativas + 1}/{max_tentativas})") # Log de debug
+            resposta = _envia_comando(host, porta, comando, timeout) # Envia o comando REGISTER e espera a resposta
+            
+            # Se chegou aqui, o REGISTER foi bem sucedido
+            logger.info(f"[Rendezvous] REGISTER bem sucedido {state.peer_id}")
+            logger.info(f"[Rendezvous] Peer registrado em {resposta.get('observed_ip')}:{resposta.get('observed_port')} com TTL {resposta.get('ttl')} segundos")  
+            return resposta # Retorna a resposta do servidor
+                
+        except RendezvousError as e: # Erro de conexão (retry)
+            ultima_excecao = e
+            logger.warning(f"[Rendezvous] REGISTER falhou (tentativa {tentativas + 1}/{max_tentativas}): {e}")
+            
+            if tentativas < max_tentativas - 1: # Se não for a ultima tentativa, aguarda o backoff antes de tentar novamente
+                backoff = backoof_base ** tentativas # Calcula o tempo de backoff exponencial
+                logger.info(f"[Rendezvous] Aguardando {backoff}s antes de nova tentativa...")
+                time.sleep(backoff) # Aguarda o tempo de backoff antes de tentar novamente
+    
+    logger.error(f"[Rendezvous] REGISTER falhou após {max_tentativas} tentativas.") # Registra erro final
+    if ultima_excecao:
+        raise ultima_excecao # Lança a última exceção capturada
+    else:
+        raise RendezvousError("REGISTER falhou: nenhuma tentativa foi executada")
+
+def discover(state, namespace: Optional[str] = None) -> List[Dict[str, Any]]:
+    # Obtém as configurações no state
+    host = state.get_config("rendezvous", "host")
+    porta = state.get_config("rendezvous", "port")
+    timeout = state.get_config("network", "connection_timeout")
+    
+    # dicionário com o comando DISCOVER
+    comando = {
+        "type": "DISCOVER"
+    } 
+    if namespace:
+        comando["namespace"] = namespace # Adiciona o namespace ao comando se fornecido
+        
+    try:
+        logger.debug(f"[Rendezvous] Executand DISCOVER (namespace = {namespace or '*'})") # Log de debug
+        resposta = _envia_comando(host, porta, comando, timeout) # Envia o comando DISCOVER e espera a resposta
+        
+        peers = resposta.get("peers", []) # Obtém a lista de peers da resposta
+        logger.info(f"[Rendezvous] DISCOVER retornou {len(peers)} peers")
+        
+        return peers # Retorna a lista de peers encontrados
+    
+    except RendezvousError as e: # Erro 
+        logger.error(f"[Rendezvous] DISCOVER falhou: {e}")
+        raise
+
+def unregister(state) -> Dict[str, Any]:
+    # Obtém as configurações no state
+    host = state.get_config("rendezvous", "host")
+    porta = state.get_config("rendezvous", "port")
+    timeout = state.get_config("network", "connection_timeout")
+    
+    # dicionário com o comando UNREGISTER
+    comando = {
+        "type": "UNREGISTER",
+        "namespace": state.namespace,
+        "name": state.name,
+        "port": state.port
+    }
+    
+    try:
+        logger.debug(f"[Rendezvous] Executando UNREGISTER") # Log de debug
+        resposta = _envia_comando(host, porta, comando, timeout) # Envia o comando UNREGISTER e espera a resposta
+        
+        logger.info(f"[Rendezvous] UNREGISTER bem sucedido para {state.peer_id}")
+        return resposta # Retorna a resposta do servidor
+    
+    except RendezvousError as e: # Erro
+        logger.error(f"[Rendezvous] UNREGISTER falhou: {e}")
+        raise   
