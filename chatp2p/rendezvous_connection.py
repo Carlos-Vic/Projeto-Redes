@@ -124,7 +124,7 @@ def register(state, retry: bool = True) -> Dict[str, Any]:
             
             # Se chegou aqui, o REGISTER foi bem sucedido
             logger.info(f"[Rendezvous] REGISTER bem sucedido {state.peer_id}")
-            logger.info(f"[Rendezvous] Peer registrado em {resposta.get('observed_ip')}:{resposta.get('observed_port')} com TTL {resposta.get('ttl')} segundos")  
+            logger.info(f"[Rendezvous] Peer registrado em {resposta.get('ip')}:{resposta.get('port')} com TTL {resposta.get('ttl')} segundos")
             return resposta # Retorna a resposta do servidor
                 
         except RendezvousError as e: # Erro de conexão (retry)
