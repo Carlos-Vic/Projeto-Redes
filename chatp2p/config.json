@@ -12,7 +12,7 @@
     "network": {
         "ack_timeout" : 20,
         "max_msg_size": 32768,
-        "connection_timeout" : 30
+        "connection_timeout" : 90
     },
 
     "peer_connection": {
