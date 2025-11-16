@@ -1,5 +1,6 @@
 from state import State
 from rendezvous_connection import *
+from p2p_client import P2PClient
 
 
 class CLI:
@@ -7,6 +8,7 @@ class CLI:
         self.config_path = config_path # Caminho para o arquivo de configuração
         self.state = None # Estado inicializado como None
         self.registrado = False # Flag para indicar se o peer está registrado no servidor rendezvous
+        self.p2p_client = None # Cliente P2P inicializado como None
     
     
     
@@ -177,6 +179,14 @@ class CLI:
         return True
         
     def limpar(self): # Limpa o estado antes de sair para conexão não ficar registrada
+        if self.p2p_client:
+            print("Encerrando cliente P2P...")
+            try:
+                self.p2p_client.stop() # Tenta parar o cliente P2P
+                print("Cliente P2P encerrado com sucesso.")
+            except Exception as e:
+                print(f"Falha ao encerrar cliente P2P: {e}")
+              
         if self.registrado and self.state: # Se estiver registrado, tenta desregistrar
             print("Removendo registro antes de sair...")
             try:
@@ -187,6 +197,7 @@ class CLI:
     
     def run(self):
         print("Bem-vindo ao chat P2P!")
+        
         self.cmd_setup()
         if not self.state:
             print("Estado não configurado. Saindo...")
@@ -196,6 +207,12 @@ class CLI:
         if not self.registrado:
             print("Não foi possível registrar. Saindo...")
             return
+        try:
+            self.p2p_client = P2PClient(self.state)
+            self.p2p_client.start()
+        except Exception as e:
+            return
+        
         print()
         print("Digite 'help' para ver os comandos disponíveis.")
         print()
