@@ -1,5 +1,5 @@
 from state import State
-from rendezvous_client import *
+from rendezvous_connection import *
 
 
 class CLI:
@@ -9,6 +9,33 @@ class CLI:
         self.registrado = False # Flag para indicar se o peer está registrado no servidor rendezvous
     
     
+    
+    def cmd_help(self):
+        print("\n" + "="*60)
+        print("Comandos disponíveis".center(60))
+        print("="*60)
+        
+        comandos = [
+          ("peers [namespace]", "Descobrir peers ativos"),
+          ("", "  - peers          : Lista todos os peers"),
+          ("", "  - peers CIC      : Lista peers do namespace CIC"),
+          ("", ""),
+          ("unregister", "Desregistrar do servidor rendezvous"),
+          ("", ""),
+          ("quit ou exit", "Sair do programa"),
+          ("", ""),
+          ("help", "Mostrar esta ajuda"),
+      ]
+
+        for cmd, desc in comandos:
+            if cmd:
+                print(f"{cmd:20s} - {desc}")
+            else:
+                print(f" {desc}")
+        
+        print("="*60)
+        print()
+            
     def cmd_setup(self): # Configura o estado inicial
         try:
             # Inicializa o estado
@@ -138,15 +165,12 @@ class CLI:
 
         if cmd in ['quit', 'exit']:
             return False
-        elif cmd == 'setup':
-            self.cmd_setup() # Configura o estado inicial
-        elif cmd == 'registrar':
-            self.cmd_registrar() # Registra o peer no servidor rendezvous
-        elif cmd == 'discover':
-            self.cmd_discover(args) # Descobre peers no servidor rendezvous
-        elif cmd == 'unregister':
-            self.cmd_unregister() # Desregistra o peer do servidor rendezvous
-
+        elif cmd in ['help']:
+            self.cmd_help()
+        elif cmd in ['peers']:
+            self.cmd_discover(args)
+        elif cmd in ['unregister']:
+            self.cmd_unregister()
         else:
             print(f"Comando desconhecido: {cmd}")
 
@@ -163,12 +187,24 @@ class CLI:
     
     def run(self):
         print("Bem-vindo ao chat P2P!")
-        print("Digite 'setup' para começar.")
+        self.cmd_setup()
+        if not self.state:
+            print("Estado não configurado. Saindo...")
+            return
+        
+        self.cmd_registrar()
+        if not self.registrado:
+            print("Não foi possível registrar. Saindo...")
+            return
+        print()
+        print("Digite 'help' para ver os comandos disponíveis.")
+        print()
+        
         
         try:
             while True: # Loop principal do CLI
                try:
-                    comando = input("rendezvous> ") # Pede o comando ao usuário
+                    comando = input("chatp2p> ") # Pede o comando ao usuário
                     if not self.processa_comando(comando): # Processa o comando
                         break
                except EOFError: # Trata EOF (Ctrl+D)
