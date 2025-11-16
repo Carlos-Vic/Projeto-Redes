@@ -22,6 +22,8 @@ class CLI:
           ("", "  - peers          : Lista todos os peers"),
           ("", "  - peers CIC      : Lista peers do namespace CIC"),
           ("", ""),
+          ("conn", "Mostrar conexões ativas (inbound/outbound)"),
+          ("", ""),
           ("unregister", "Desregistrar do servidor rendezvous"),
           ("", ""),
           ("quit ou exit", "Sair do programa"),
@@ -138,11 +140,7 @@ class CLI:
     def cmd_unregister(self): # Desregistra o peer do servidor rendezvous
         if not self.state:
             print("Estado não inicializado. Execute setup primeiro.")
-            return
-        
-        if not self.registrado:
-            print("Peer não registrado. Execute registrar() primeiro.")
-            return
+            return      
         
         print("Desregistrando do servidor de rendezvous...")
         
@@ -155,6 +153,38 @@ class CLI:
             
         except RendezvousError as e:
             print(f"Falha ao desregistrar do servidor de rendezvous: {e}")
+    
+    def cmd_conn(self):
+        if not self.state:
+            print("Estado não inicializado. Execute setup primeiro.")
+            return
+        
+        conexoes = self.state.get_todas_conexoes() # Obtém todas as conexões ativas do estado
+        
+        print("Conexões ativas:")
+        outbounds = {}
+        inbounds = {}
+        
+        for peer_id, conexao in conexoes.items(): # Separa conexões em inbound e outbound
+            if conexao.foi_iniciado:
+                outbounds[peer_id] = conexao
+            else:
+                inbounds[peer_id] = conexao
+        print("Outbound connections:")
+        if outbounds:
+            for peer_id, conexao in outbounds.items():
+                ip, porta = conexao.remoto_ip, conexao.remoto_porta
+                print(f" - {peer_id} ({ip}:{porta})")
+        else:
+            print(" - Nenhuma conexão outbound ativa.")
+
+        print("Inbound connections:")
+        if inbounds:
+            for peer_id, conexao in inbounds.items():
+                ip, porta = conexao.remoto_ip, conexao.remoto_porta
+                print(f" - {peer_id} ({ip}:{porta})")
+        else:
+            print(" - Nenhuma conexão inbound ativa.")      
             
     def processa_comando(self, comando): # Processa o comando digitado pelo usuário
 
@@ -173,6 +203,8 @@ class CLI:
             self.cmd_discover(args)
         elif cmd in ['unregister']:
             self.cmd_unregister()
+        elif cmd in ['conn']:
+            self.cmd_conn()
         else:
             print(f"Comando desconhecido: {cmd}")
 
@@ -207,10 +239,14 @@ class CLI:
         if not self.registrado:
             print("Não foi possível registrar. Saindo...")
             return
+
+        print("Iniciando servidor P2P e conexões automáticas...")
         try:
             self.p2p_client = P2PClient(self.state)
             self.p2p_client.start()
+            print("Servidor P2P iniciado com sucesso!")
         except Exception as e:
+            print(f"Falha ao iniciar servidor P2P: {e}")
             return
         
         print()
