@@ -6,6 +6,7 @@ import queue
 import uuid
 from datetime import datetime
 from typing import Dict, Any, Optional
+from keep_alive import KeepAlive
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +19,7 @@ class PeerConnection:
         self.peer_id_remoto = peer_id_remoto
         self.state = state
         self.foi_iniciado = foi_iniciado
+        self.keep_alive = None
         
         # Extrair IP e porta remotos
         try:
@@ -55,6 +57,11 @@ class PeerConnection:
         self._thread_escrita.start() # Inicia thread de escrita
 
         logger.debug(f"[PeerConnection] Threads de leitura e escrita iniciadas para {self.peer_id_remoto}")
+        
+        if self.foi_iniciado:
+            self.keep_alive = KeepAlive(self, self.state)
+            self.keep_alive.start() # Inicia o keep-alive se for iniciador da conexão
+            logger.debug(f"[PeerConnection] KeepAlive iniciado para {self.peer_id_remoto}")
         
         
     def handshake_iniciador(self) -> bool: # Realiza o handshake como iniciador da conexão
@@ -137,7 +144,10 @@ class PeerConnection:
         logger.debug(f"[PeerConnection] Enviando PONG para {self.peer_id_remoto}")
     
     def _processa_pong(self, msg_pong: Dict[str, Any]): # Processa uma mensagem PONG recebida
-        logger.debug(f"[PeerConnection] PONG recebido de {self.peer_id_remoto}: {msg_pong}")
+        if self.keep_alive:
+            self.keep_alive.processa_pong(msg_pong)
+        else:
+            logger.debug(f"[PeerConnection] PONG recebido de {self.peer_id_remoto}: {msg_pong}")
         
     def envia_bye(self, reason: str = "Encerrando sessão"): # Envia mensagem BYE para encerrar a conexão com um peer
         # Dicionário com a mensagem BYE
@@ -182,6 +192,9 @@ class PeerConnection:
             return # Já está fechado
         
         logger.info(f"[PeerConnection] Fechando conexão com {self.peer_id_remoto}")
+        
+        if self.keep_alive:
+            self.keep_alive.stop() # Para o keep-alive se estiver ativo
         
         self._rodando.clear() # Marca a conexão como não rodando
         
