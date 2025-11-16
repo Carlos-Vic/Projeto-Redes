@@ -58,7 +58,7 @@ def _envia_comando(host: str, port: int, command: Dict[str, Any], timeout: int =
                 if not chunk: # Se o chunk estiver vazio, a conexão foi fechada
                     raise RendezvousConnectionError("Conexão fechada pelo servidor antes de receber a resposta completa")
                 resposta_servidor += chunk # Adiciona os bytes recebidos ao buffer
-                print(resposta_servidor) # DEBUG para ver qual resposta ta chegando (lembrar de tirar depois)
+                #print(resposta_servidor) # DEBUG para ver qual resposta ta chegando (lembrar de tirar depois)
             
         except socket.timeout: # Timeout ao receber dados
             raise RendezvousConnectionError("Timeout ao receber resposta do servidor")
@@ -78,7 +78,7 @@ def _envia_comando(host: str, port: int, command: Dict[str, Any], timeout: int =
             error_msg = resposta_json.get('message', '') # Pega a mensagem de erro retornada pelo servidor
             raise RendezvousServerErro(error_type, error_msg)
         
-        print(resposta_json)  # DEBUG para ver a resposta JSON completa (lembrar de tirar depois)
+        #print(resposta_json)  # DEBUG para ver a resposta JSON completa (lembrar de tirar depois)
         return resposta_json # retorna a resposta JSON do servidor
     
     # Garante que o socket será fechado no final

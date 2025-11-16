@@ -15,6 +15,11 @@
         "connection_timeout" : 30
     },
 
+    "peer_connection": {
+        "retry_attempts" : 3,
+        "backoff_base" : 2
+    },
+
     "reconnection": {
         "max_attempts" : 5,
         "backoff_base" : 2,
@@ -28,7 +33,7 @@
         "max_ping_failures" : 3
     },
     "logging": {
-        "level" : "INFO",
+        "level" : "DEBUG",
         "log_to_file" : true,
         "file" : "chatp2p.log"
     }

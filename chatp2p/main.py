@@ -1,6 +1,7 @@
 from cli import CLI
 import os
 import sys
+from logger import configurar_logging
 
 def main():
     config_path = "config.json"  # Caminho padrão para o arquivo de configuração
@@ -8,6 +9,8 @@ def main():
     if not os.path.exists(config_path): # Verifica se o arquivo de configuração existe
         print(f"Arquivo de configuração não encontrado: {config_path}")
         sys.exit(1) # Sai com código de erro 1
+        
+    configurar_logging(config_path)
         
     try:
         cli = CLI(config_path) # Inicializa a interface de linha de comando
