@@ -67,7 +67,7 @@ Este projeto implementa um **cliente de Chat P2P** que se conecta a um servidor 
   "network": {
     "ack_timeout": 20,
     "max_msg_size": 32768,
-    "connection_timeout": 30
+    "connection_timeout": 90
   },
   "peer_connection": {
     "retry_attempts": 3,
@@ -96,6 +96,10 @@ Este projeto implementa um **cliente de Chat P2P** que se conecta a um servidor 
 - `logging.level`: Altere de `"DEBUG"` para `"INFO"` para reduzir verbosidade dos logs
 - `discover_interval`: Intervalo em segundos entre descobertas automáticas (padrão: 60s)
 - `keepalive.ping_interval`: Intervalo entre PINGs (padrão: 30s)
+- `network.connection_timeout`: Timeout do socket TCP em segundos (padrão: 90s)
+  - **IMPORTANTE:** Deve ser **3x maior** que `ping_interval` para evitar timeouts durante keep-alive
+  - Se muito baixo, conexões são fechadas antes do próximo PING chegar
+  - Valor recomendado: 90s (permite até 2 PINGs perdidos)
 
 ---
 
@@ -613,6 +617,6 @@ Inbound connections:
 - O sistema atual já funciona para **descoberta automática** e **manutenção de conexões**
 - A base está sólida para adicionar mensageria
 - Todos os módulos usam **threading** e são **thread-safe**
-- Logs podem ser ajustados via config.json sem recompilar
+- Logs podem ser ajustados via config.json
 
 ---
