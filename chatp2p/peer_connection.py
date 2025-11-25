@@ -327,11 +327,74 @@ class PeerConnection:
                 self._envia_bye_ok(msg)
             elif msg_type == "BYE_OK":
                 self._processa_bye_ok(msg)
+            elif msg_type == "SEND":
+                self._processa_send(msg)
+            elif msg_type == "ACK":
+                self._processa_ack(msg)
+            elif msg_type == "PUB":
+                self._processa_pub(msg)
             else:
                 logger.warning(f"[PeerConnection] Mensagem desconhecida recebida de {self.peer_id_remoto}: {msg}")
                 
         except Exception as e:
             logger.error(f"[PeerConnection] Erro ao processar mensagem de {self.peer_id_remoto}: {e}")
+
+
+    # Public API para enfileirar mensagens (usado por MessageRouter)
+    def enqueue_msg(self, msg: Dict[str, Any]):
+        """Coloca mensagem na fila de envio (thread-safe)."""
+        self._envia_queue.put(msg)
+
+    def _processa_send(self, msg: Dict[str, Any]):
+        """Processa uma mensagem SEND recebida: entrega ao router/app e
+        envia ACK se necessário (delegando ao MessageRouter se existir)."""
+        try:
+            router = self.state.get_message_router()
+            if router:
+                router.process_incoming(msg, self)
+                return
+
+            # Fallback: entregar localmente e enviar ACK se necessário
+            src = msg.get("src")
+            payload = msg.get("payload")
+            logger.info(f"[PeerConnection] SEND recebido de {src}: {payload}")
+
+            if msg.get("require_ack"):
+                ack = {
+                    "type": "ACK",
+                    "msg_id": msg.get("msg_id"),
+                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                    "src": self.state.get_peer_info(),
+                    "dst": src,
+                    "ttl": 1,
+                }
+                self.enqueue_msg(ack)
+
+        except Exception:
+            logger.exception("[PeerConnection] Erro ao processar SEND")
+
+    def _processa_ack(self, msg: Dict[str, Any]):
+        try:
+            router = self.state.get_message_router()
+            if router:
+                router.process_incoming(msg, self)
+            else:
+                logger.info(f"[PeerConnection] ACK recebido: {msg}")
+        except Exception:
+            logger.exception("[PeerConnection] Erro ao processar ACK")
+
+    def _processa_pub(self, msg: Dict[str, Any]):
+        try:
+            router = self.state.get_message_router()
+            if router:
+                router.process_incoming(msg, self)
+                return
+
+            src = msg.get("src")
+            payload = msg.get("payload")
+            logger.info(f"[PeerConnection] PUB recebido de {src}: {payload}")
+        except Exception:
+            logger.exception("[PeerConnection] Erro ao processar PUB")
         
         
         

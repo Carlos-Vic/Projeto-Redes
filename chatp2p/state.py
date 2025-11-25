@@ -108,3 +108,12 @@ class State:
             else:
                 return None
         return value
+
+    # MessageRouter storage (opcional)
+    def set_message_router(self, router):
+        with self._lock:
+            self._message_router = router
+
+    def get_message_router(self):
+        with self._lock:
+            return getattr(self, "_message_router", None)

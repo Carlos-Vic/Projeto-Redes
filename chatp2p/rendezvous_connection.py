@@ -74,9 +74,11 @@ def _envia_comando(host: str, port: int, command: Dict[str, Any], timeout: int =
             raise RendezvousError(f"Erro ao converter a resposta do servidor: {e}")
         
         if resposta_json.get('status') == 'ERROR': # Se o status da resposta for erro, levanta exceção específica
-            error_type = resposta_json.get('error', 'unknown') # Pega o tipo de erro retornado pelo servidor
-            error_msg = resposta_json.get('message', '') # Pega a mensagem de erro retornada pelo servidor
-            raise RendezvousServerErro(error_type, error_msg)
+            # O servidor costuma retornar o detalhe do erro em 'message' (ex: "bad_namespace").
+            # Alguns clientes/implementações podem usar 'error' — aceite ambos.
+            error_msg = resposta_json.get('message') or resposta_json.get('error') or 'unknown'
+            # Use error_msg como tipo/descrição para facilitar logs/CLI
+            raise RendezvousServerErro(error_msg, resposta_json.get('details', ''))
         
         #print(resposta_json)  # DEBUG para ver a resposta JSON completa (lembrar de tirar depois)
         return resposta_json # retorna a resposta JSON do servidor
@@ -116,26 +118,33 @@ def register(state, retry: bool = True) -> Dict[str, Any]:
     backoof_base = state.get_config("rendezvous", "register_backoff_base") # Base do backoff exponencial
         
     ultima_excecao = None
-    
+
     for tentativas in range(max_tentativas): # Loop de tentativas
         try:
             logger.debug(f"[Rendezvous] Tentando REGISTER (tentativa {tentativas + 1}/{max_tentativas})") # Log de debug
             resposta = _envia_comando(host, porta, comando, timeout) # Envia o comando REGISTER e espera a resposta
-            
+
             # Se chegou aqui, o REGISTER foi bem sucedido
-            logger.info(f"[Rendezvous] REGISTER bem sucedido {state.peer_id}")
+            logger.info(f"[Rendezvous] REGISTER bem sucedido {getattr(state, 'peer_id', '')}")
             logger.info(f"[Rendezvous] Peer registrado em {resposta.get('ip')}:{resposta.get('port')} com TTL {resposta.get('ttl')} segundos")
             return resposta # Retorna a resposta do servidor
-                
-        except RendezvousError as e: # Erro de conexão (retry)
+
+        except RendezvousServerErro as e:
+            # Erro lógico retornado pelo servidor (por exemplo: bad_namespace, bad_name).
+            # Não faz sentido retryar: informe imediatamente.
+            logger.error(f"[Rendezvous] REGISTER recebeu erro do servidor: {e}")
+            raise
+
+        except RendezvousConnectionError as e:
+            # Erros de rede/timeouts: aplicar retry/backoff
             ultima_excecao = e
             logger.warning(f"[Rendezvous] REGISTER falhou (tentativa {tentativas + 1}/{max_tentativas}): {e}")
-            
+
             if tentativas < max_tentativas - 1: # Se não for a ultima tentativa, aguarda o backoff antes de tentar novamente
                 backoff = backoof_base ** tentativas # Calcula o tempo de backoff exponencial
                 logger.info(f"[Rendezvous] Aguardando {backoff}s antes de nova tentativa...")
                 time.sleep(backoff) # Aguarda o tempo de backoff antes de tentar novamente
-    
+
     logger.error(f"[Rendezvous] REGISTER falhou após {max_tentativas} tentativas.") # Registra erro final
     if ultima_excecao:
         raise ultima_excecao # Lança a última exceção capturada

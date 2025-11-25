@@ -6,6 +6,7 @@ from typing import Dict, Any, List
 from peer_server import PeerServer
 from peer_connection import PeerConnection, PeerConnectionError
 from rendezvous_connection import discover, RendezvousError
+from message_router import MessageRouter
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,19 @@ class P2PClient:
             self.peer_server = PeerServer(self.state)
             self.peer_server.start()
             logger.debug(f"[P2PClient] PeerServer iniciado na porta {self.state.port}")
+            # Instancia e registra o MessageRouter no state
+            try:
+                router = MessageRouter(self.state)
+                self.state.set_message_router(router)
+                # Registra callback padrão que imprime mensagens recebidas no console
+                try:
+                    router.register_receive_callback(lambda src, payload, meta: print(f"[{src}] {payload}"))
+                except Exception:
+                    logger.exception("[P2PClient] Erro ao registrar callback padrão do MessageRouter")
+
+                logger.debug("[P2PClient] MessageRouter criado e registrado no state")
+            except Exception:
+                logger.exception("[P2PClient] Falha ao criar MessageRouter")
             
             self._rodando.set()
             
