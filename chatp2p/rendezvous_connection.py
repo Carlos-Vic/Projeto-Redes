@@ -125,7 +125,11 @@ def register(state, retry: bool = True) -> Dict[str, Any]:
             resposta = _envia_comando(host, porta, comando, timeout) # Envia o comando REGISTER e espera a resposta
 
             # Se chegou aqui, o REGISTER foi bem sucedido
-            logger.info(f"[Rendezvous] REGISTER bem sucedido {getattr(state, 'peer_id', '')}")
+            # Atualiza o state com o TTL e timestamp confirmados pelo servidor
+            state.ttl_recebido = resposta.get('ttl')
+            state.timestamp_registro = time.time()
+
+            logger.info(f"[Rendezvous] REGISTER bem sucedido {state.peer_id}")
             logger.info(f"[Rendezvous] Peer registrado em {resposta.get('ip')}:{resposta.get('port')} com TTL {resposta.get('ttl')} segundos")
             return resposta # Retorna a resposta do servidor
 
