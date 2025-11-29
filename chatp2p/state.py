@@ -19,6 +19,10 @@ class State:
         self.ttl: Optional[int] = None
         self.peer_id: Optional[str] = None
         self.tempo_ultimo_registro: Optional[datetime] = None # Último horário de registro no servidor (para controlar o TTL no servidor rdzv)
+
+        # Controle de re-registro automático (valores confirmados pelo servidor)
+        self.ttl_recebido: Optional[int] = None  # TTL confirmado pelo servidor na resposta do REGISTER
+        self.timestamp_registro: Optional[float] = None  # Timestamp Unix do último REGISTER bem-sucedido
         
         self._conexoes: Dict[str, Any] = {} # Dicionário de conexões ativas {peer_id: PeerConnection}
         
