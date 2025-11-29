@@ -58,13 +58,31 @@ class CLI:
             
             porta = int(input("Digite a porta para escutar (ex: 5000): "))
 
-            ttl = input("Digite o TTL em segundos (ou deixe vazio para padrão 7200): ").strip()
-            if ttl:
-                ttl = int(ttl)
-            else:
-                ttl = 7200 
-        
-                
+            # Loop para validar TTL até que seja válido
+            threshold = self.state.get_config("rendezvous", "ttl_warning_treshold")
+            ttl_minimo = threshold * 2
+
+            while True:
+                ttl_input = input("Digite o TTL em segundos (ou deixe vazio para padrão 7200): ").strip()
+
+                if not ttl_input:
+                    ttl = 7200  # Padrão
+                    break
+
+                try:
+                    ttl = int(ttl_input)
+                except ValueError:
+                    print("ERRO: TTL deve ser um número inteiro.")
+                    continue
+
+                # Validação: TTL deve ser maior que 2x o threshold para evitar loop de re-registro
+                if ttl <= ttl_minimo:
+                    print(f"ERRO: TTL deve ser maior que {ttl_minimo} segundos (2x o threshold de re-registro)")
+                    print(f"Por favor, escolha TTL > {ttl_minimo}s ou deixe vazio para padrão (7200s)")
+                    # Loop continua, pede novamente
+                else:
+                    break  # TTL válido, sai do loop
+
             self.state.set_peer_info(name, namespace, porta, ttl) # Define as informações do peer no estado
             
             # Mostra as informações definidas
