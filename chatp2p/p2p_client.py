@@ -107,8 +107,9 @@ class P2PClient:
                 tempo_decorrido = time.time() - timestamp_registro
                 tempo_restante = ttl_recebido - tempo_decorrido
 
-                # Pega o threshold do config (padrão: 60 segundos)
-                threshold = self.state.get_config("rendezvous", "ttl_warning_treshold")
+                # Threshold dinâmico: 10% do TTL ou threshold do config, o que for MENOR
+                threshold_config = self.state.get_config("rendezvous", "ttl_warning_treshold")
+                threshold = min(threshold_config, ttl_recebido * 0.1)
 
                 # Se está próximo de expirar, re-registra
                 if tempo_restante <= threshold:
