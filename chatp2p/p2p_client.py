@@ -5,7 +5,7 @@ import logging
 from typing import Dict, Any, List
 from peer_server import PeerServer
 from peer_connection import PeerConnection, PeerConnectionError
-from rendezvous_connection import discover, RendezvousError
+from rendezvous_connection import discover, register, RendezvousError
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +14,8 @@ class P2PClient:
         self.state = state
         self.peer_server = None
         self._rodando = threading.Event()
-        self._thread_discover = None  
+        self._thread_discover = None
+        self._thread_reregister = None  
         
         
     def start(self):
@@ -25,11 +26,17 @@ class P2PClient:
             
             self._rodando.set()
             
-            self._thread_discover = threading.Thread(target=self._loop_discover, 
+            self._thread_discover = threading.Thread(target=self._loop_discover,
                                                     name="P2PClient_Discover",
                                                     daemon=True)
             self._thread_discover.start()
-            logger.debug("[P2PClient] Loop de discover iniciada")
+            logger.debug("[P2PClient] Loop de discover iniciado")
+
+            self._thread_reregister = threading.Thread(target=self._loop_reregister,
+                                                      name="P2PClient_Reregister",
+                                                      daemon=True)
+            self._thread_reregister.start()
+            logger.debug("[P2PClient] Loop de re-registro iniciado")
         
         except Exception as e:
             logger.error(f"[P2PClient] Erro ao iniciar PeerServer: {e}")
@@ -49,12 +56,16 @@ class P2PClient:
            
             thread_atual = threading.current_thread()
             
-            if self._thread_discover and self._thread_discover.is_alive(): 
-                if thread_atual != self._thread_discover: 
+            if self._thread_discover and self._thread_discover.is_alive():
+                if thread_atual != self._thread_discover:
                     self._thread_discover.join(timeout=5)
-                               
+
+            if self._thread_reregister and self._thread_reregister.is_alive():
+                if thread_atual != self._thread_reregister:
+                    self._thread_reregister.join(timeout=5)
+
         except Exception as e:
-            logger.error(f"[P2PClient] Erro ao parar thread de discover: {e}")
+            logger.error(f"[P2PClient] Erro ao parar threads: {e}")
                 
                
     
@@ -77,8 +88,43 @@ class P2PClient:
                 logger.error(f"[P2PClient] Erro no discover automático {e}")
 
             time.sleep(intervalo)
-                
-    
+
+    def _loop_reregister(self):
+        intervalo_verificacao = 30  # Verifica a cada 30 segundos
+
+        while self._rodando.is_set():
+            try:
+                # Pega o TTL recebido e o timestamp do último registro
+                ttl_recebido = self.state.ttl_recebido
+                timestamp_registro = self.state.timestamp_registro
+
+                # Se ainda não registrou, espera e continua
+                if ttl_recebido is None or timestamp_registro is None:
+                    time.sleep(intervalo_verificacao)
+                    continue
+
+                # Calcula quanto tempo falta para expirar
+                tempo_decorrido = time.time() - timestamp_registro
+                tempo_restante = ttl_recebido - tempo_decorrido
+
+                # Pega o threshold do config (padrão: 60 segundos)
+                threshold = self.state.get_config("rendezvous", "ttl_warning_treshold")
+
+                # Se está próximo de expirar, re-registra
+                if tempo_restante <= threshold:
+                    logger.info(f"[P2PClient] TTL expirando em {tempo_restante:.0f}s. Iniciando re-registro...")
+                    try:
+                        register(self.state)
+                        logger.info(f"[P2PClient] Re-registro bem-sucedido! Novo TTL: {self.state.ttl_recebido}s")
+                    except RendezvousError as e:
+                        logger.error(f"[P2PClient] Erro ao re-registrar: {e}")
+
+            except Exception as e:
+                logger.error(f"[P2PClient] Erro no loop de re-registro: {e}")
+
+            time.sleep(intervalo_verificacao)
+
+
     def conectar_com_peer(self, peer_info: Dict[str, Any]) -> bool:
         ip = peer_info.get("ip")
         porta = peer_info.get("port")
