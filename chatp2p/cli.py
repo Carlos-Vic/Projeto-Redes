@@ -1,6 +1,8 @@
 from state import State
 from rendezvous_connection import *
 from p2p_client import P2PClient
+import logging
+import time
 
 
 class CLI:
@@ -32,6 +34,15 @@ class CLI:
           ("conn", "Mostrar conexões ativas (inbound/outbound)"),
           ("", ""),
           ("status", "Mostrar status de peers (conectados e com falha)"),
+          ("", ""),
+          ("rtt", "Exibir RTT (Round Trip Time) de cada peer conectado"),
+          ("", ""),
+          ("reconnect", "Forçar reconciliação de peers (limpa falhas e redescobre)"),
+          ("", ""),
+          ("log <nível>", "Ajustar nível de log em runtime"),
+          ("", "  - log DEBUG      : Logs detalhados"),
+          ("", "  - log INFO       : Logs informativos (padrão)"),
+          ("", "  - log WARNING    : Apenas avisos e erros"),
           ("", ""),
           ("unregister", "Desregistrar do servidor rendezvous"),
           ("", ""),
@@ -225,6 +236,83 @@ class CLI:
 
         print("="*60 + "\n")
 
+    def cmd_rtt(self):
+        """Exibe o RTT (Round Trip Time) de cada peer conectado"""
+        if not self.state:
+            print("Estado não inicializado. Execute setup primeiro.")
+            return
+
+        conexoes = self.state.get_todas_conexoes()
+
+        print("\n" + "="*60)
+        print("RTT (Round Trip Time) por Peer".center(60))
+        print("="*60)
+
+        if not conexoes:
+            print("\nNenhum peer conectado.")
+            print("="*60 + "\n")
+            return
+
+        print(f"\n{'Peer ID':<25} {'RTT Médio':<15} {'Amostras':<10}")
+        print("-"*60)
+
+        for peer_id, conn in sorted(conexoes.items()):
+            if hasattr(conn, 'keep_alive') and conn.keep_alive:
+                rtt_medio = conn.keep_alive.get_rtt_medio()
+                quantidade = conn.keep_alive.get_quantidade_pings()
+
+                if rtt_medio is not None:
+                    print(f"{peer_id:<25} {rtt_medio:>8.2f} ms     {quantidade:<10}")
+                else:
+                    print(f"{peer_id:<25} {'N/A':<15} {0:<10}")
+            else:
+                print(f"{peer_id:<25} {'N/A':<15} {0:<10}")
+
+        print("="*60 + "\n")
+
+    def cmd_reconnect(self):
+        """Força reconciliação de peers (limpa falhas e redescobre)"""
+        if not self.p2p_client:
+            print("P2PClient não está rodando.")
+            return
+
+        print("Forçando reconciliação de peers...")
+
+        # Limpa lista de falhas
+        count_falhas = self.p2p_client.limpar_todas_falhas()
+        print(f"- {count_falhas} peer(s) removido(s) da lista de falhas")
+
+        # Força discover imediato
+        count_tentativas = self.p2p_client.forcar_discover()
+        print(f"- {count_tentativas} tentativa(s) de conexão iniciada(s)")
+
+        print("Reconciliação concluída!")
+
+    def cmd_log(self, args):
+        """Ajusta o nível de log em runtime"""
+        if not args:
+            print("Uso: log <NÍVEL>")
+            print("Níveis disponíveis: DEBUG, INFO, WARNING, ERROR, CRITICAL")
+            return
+
+        nivel_str = args[0].upper()
+        niveis_validos = {
+            'DEBUG': logging.DEBUG,
+            'INFO': logging.INFO,
+            'WARNING': logging.WARNING,
+            'ERROR': logging.ERROR,
+            'CRITICAL': logging.CRITICAL
+        }
+
+        if nivel_str not in niveis_validos:
+            print(f"Nível inválido: {nivel_str}")
+            print("Níveis disponíveis: DEBUG, INFO, WARNING, ERROR, CRITICAL")
+            return
+
+        # Ajusta o nível do logger raiz (afeta todos os módulos)
+        logging.getLogger().setLevel(niveis_validos[nivel_str])
+        print(f"Nível de log ajustado para: {nivel_str}")
+
     def cmd_conn(self):
         if not self.state:
             print("Estado não inicializado. Use o comando 'setup' primeiro.")
@@ -348,6 +436,12 @@ class CLI:
             self.cmd_conn()
         elif cmd in ['status']:
             self.cmd_status()
+        elif cmd in ['rtt']:
+            self.cmd_rtt()
+        elif cmd in ['reconnect']:
+            self.cmd_reconnect()
+        elif cmd in ['log']:
+            self.cmd_log(args)
         elif cmd in ['msg']:
             self.cmd_msg(args)
         elif cmd in ['pub']:

@@ -12,7 +12,9 @@ class KeepAlive:
         self._falhas = 0
         self._pings_pendentes = {}
         self._rodando = threading.Event()
-        self._thread_keep_alive = None      
+        self._thread_keep_alive = None
+        self._rtts = []  # Armazena os últimos RTTs (em ms)
+        self._max_rtts = 10  # Mantém apenas os últimos 10 RTTs      
         
     def start(self):
         try:
@@ -77,17 +79,33 @@ class KeepAlive:
                 
     def processa_pong(self, msg_pong):
         msg_id = msg_pong.get("msg_id") # Extrai o ID da mensagem do pong recebido
-        
+
         try:
             if msg_id in self._pings_pendentes: # Verifica se o pong corresponde a um ping pendente
                 tempo_envio = self._pings_pendentes[msg_id] # Obtém o tempo de envio do ping
                 rtt = (time.time() - tempo_envio) * 1000  # RTT em milissegundos
                 self._pings_pendentes.pop(msg_id) # Remove o ping pendente
                 self._falhas = 0  # Reseta o contador de falhas
+
+                # Armazena o RTT (mantém apenas os últimos N)
+                self._rtts.append(rtt)
+                if len(self._rtts) > self._max_rtts:
+                    self._rtts.pop(0)
+
                 logger.debug(f"[KeepAlive] Pong recebido de {self.conexao.peer_id_remoto}. RTT: {rtt:.2f} ms")
             else:
                 # Apenas loga se o msg_id do pong não for reconhecido
-                logger.info(f"[KeepAlive] Pong recebido com msg_id desconhecido de {self.conexao.peer_id_remoto}") 
-        
+                logger.info(f"[KeepAlive] Pong recebido com msg_id desconhecido de {self.conexao.peer_id_remoto}")
+
         except Exception as e:
-            logger.error(f"[KeepAlive] Erro ao processar pong de {self.conexao.peer_id_remoto}: {e}")   
+            logger.error(f"[KeepAlive] Erro ao processar pong de {self.conexao.peer_id_remoto}: {e}")
+
+    def get_rtt_medio(self):
+        """Retorna o RTT médio dos últimos pings (em ms)"""
+        if not self._rtts:
+            return None
+        return sum(self._rtts) / len(self._rtts)
+
+    def get_quantidade_pings(self):
+        """Retorna a quantidade de RTTs armazenados"""
+        return len(self._rtts)   

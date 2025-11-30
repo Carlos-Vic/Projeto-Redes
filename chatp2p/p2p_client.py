@@ -125,6 +125,48 @@ class P2PClient:
                 del self._peers_com_falha[peer_id]
                 logger.debug(f"[P2PClient] Peer {peer_id} removido da lista de falhas")
 
+    def limpar_todas_falhas(self):
+        """Limpa a lista de peers com falha (usado pelo comando /reconnect)"""
+        with self._lock_falhas:
+            count = len(self._peers_com_falha)
+            self._peers_com_falha.clear()
+            logger.info(f"[P2PClient] Lista de falhas limpa ({count} peers removidos)")
+            return count
+
+    def forcar_discover(self):
+        """Força um discover imediato e tenta conectar com os peers (usado pelo comando /reconnect)"""
+        try:
+            logger.info("[P2PClient] Forçando discover imediato...")
+            peers = discover(self.state)
+            meu_peer_id = self.state.peer_id
+
+            count_tentativas = 0
+
+            for peer in peers:
+                peer_id_remoto = f"{peer['name']}@{peer['namespace']}"
+
+                if peer_id_remoto == meu_peer_id:
+                    continue
+
+                if self.state.verifica_conexao(peer_id_remoto):
+                    continue
+
+                # Tenta conectar em paralelo (não aguarda término)
+                thread = threading.Thread(
+                    target=self._tentar_conectar_thread,
+                    args=(peer,),
+                    daemon=True
+                )
+                thread.start()
+                count_tentativas += 1
+
+            logger.info(f"[P2PClient] Discover forçado concluído. {count_tentativas} tentativas de conexão iniciadas em background.")
+            return count_tentativas
+
+        except RendezvousError as e:
+            logger.error(f"[P2PClient] Erro ao forçar discover: {e}")
+            return 0
+
     def _tentar_conectar_thread(self, peer: Dict[str, Any]):
         """Thread auxiliar para tentar conectar com um peer em paralelo"""
         peer_id_remoto = f"{peer['name']}@{peer['namespace']}"
