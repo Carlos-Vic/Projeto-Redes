@@ -57,7 +57,7 @@ class PeerConnection:
         self._thread_escrita.start() # Inicia thread de escrita
 
         logger.debug(f"[PeerConnection] Threads de leitura e escrita iniciadas para {self.peer_id_remoto}")
-        
+
         if self.foi_iniciado:
             self.keep_alive = KeepAlive(self, self.state)
             self.keep_alive.start() # Inicia o keep-alive se for iniciador da conexão
