@@ -22,6 +22,12 @@ class CLI:
           ("", "  - peers          : Lista todos os peers"),
           ("", "  - peers CIC      : Lista peers do namespace CIC"),
           ("", ""),
+          ("msg <peer_id> <mensagem>", "Envia uma mensagem para um peer específico"),
+          ("", "  - msg bob@geral Oi!  : Envia 'Oi!' para o peer bob@geral"),
+          ("", ""),
+          ("pub <mensagem>", "Envia uma mensagem para todos os peers conectados"),
+          ("", "  - pub Olá a todos : Envia 'Olá a todos' para todos"),
+          ("", ""),
           ("conn", "Mostrar conexões ativas (inbound/outbound)"),
           ("", ""),
           ("unregister", "Desregistrar do servidor rendezvous"),
@@ -170,11 +176,11 @@ class CLI:
             print()
             
         except RendezvousError as e:
-            print(f"Falha ao desregistrar do servidor de rendezvous: {e}")
+            print(f"Falha ao desregistrar do servidor rendezvous: {e}")
     
     def cmd_conn(self):
         if not self.state:
-            print("Estado não inicializado. Execute setup primeiro.")
+            print("Estado não inicializado. Use o comando 'setup' primeiro.")
             return
         
         conexoes = self.state.get_todas_conexoes() # Obtém todas as conexões ativas do estado
@@ -183,7 +189,7 @@ class CLI:
         outbounds = {}
         inbounds = {}
         
-        for peer_id, conexao in conexoes.items(): # Separa conexões em inbound e outbound
+        for peer_id, conexao in conexoes.items():
             if conexao.foi_iniciado:
                 outbounds[peer_id] = conexao
             else:
@@ -191,18 +197,57 @@ class CLI:
         print("Outbound connections:")
         if outbounds:
             for peer_id, conexao in outbounds.items():
-                ip, porta = conexao.remoto_ip, conexao.remoto_porta
-                print(f" - {peer_id} ({ip}:{porta})")
+                print(f"  - {peer_id} (Conectado a {conexao.sock.getpeername()})")
         else:
-            print(" - Nenhuma conexão outbound ativa.")
+            print("  (nenhuma)")
 
         print("Inbound connections:")
         if inbounds:
             for peer_id, conexao in inbounds.items():
-                ip, porta = conexao.remoto_ip, conexao.remoto_porta
-                print(f" - {peer_id} ({ip}:{porta})")
+                print(f"  - {peer_id} (Conectado de {conexao.sock.getpeername()})")
         else:
-            print(" - Nenhuma conexão inbound ativa.")      
+            print("  (nenhuma)")
+            
+    def cmd_msg(self, args):
+        if not self.state:
+            print("Estado não inicializado. Use o comando 'setup' primeiro.")
+            return
+
+        if len(args) < 2:
+            print("Uso: msg <peer_id> <mensagem>")
+            return
+
+        peer_id = args[0]
+        message = " ".join(args[1:])
+
+        router = self.state.get_message_router()
+        if not router:
+            print("Erro: Roteador de mensagens não está disponível.")
+            return
+
+        print(f"Enviando mensagem para {peer_id}...")
+        if router.send(peer_id, message):
+            print("Mensagem enviada e confirmada (ACK recebido).")
+        else:
+            print("Falha ao enviar mensagem. O peer pode estar offline ou não respondeu.")
+
+    def cmd_pub(self, args):
+        if not self.state:
+            print("Estado não inicializado. Use o comando 'setup' primeiro.")
+            return
+
+        if not args:
+            print("Uso: pub <mensagem>")
+            return
+
+        message = " ".join(args)
+        router = self.state.get_message_router()
+        if not router:
+            print("Erro: Roteador de mensagens não está disponível.")
+            return
+
+        print("Publicando mensagem para todos os peers...")
+        router.publish("*", message)
             
     def processa_comando(self, comando): # Processa o comando digitado pelo usuário
 
@@ -223,27 +268,31 @@ class CLI:
             self.cmd_unregister()
         elif cmd in ['conn']:
             self.cmd_conn()
+        elif cmd in ['msg']:
+            self.cmd_msg(args)
+        elif cmd in ['pub']:
+            self.cmd_pub(args)
         else:
             print(f"Comando desconhecido: {cmd}")
 
         return True
         
     def limpar(self): # Limpa o estado antes de sair para conexão não ficar registrada
+        print("Encerrando...")
         if self.p2p_client:
-            print("Encerrando cliente P2P...")
+            self.p2p_client.stop()
+            
+        if self.registrado:
             try:
-                self.p2p_client.stop() # Tenta parar o cliente P2P
-                print("Cliente P2P encerrado com sucesso.")
-            except Exception as e:
-                print(f"Falha ao encerrar cliente P2P: {e}")
-              
-        if self.registrado and self.state: # Se estiver registrado, tenta desregistrar
-            print("Removendo registro antes de sair...")
-            try:
-                unregister(self.state) # Tenta desregistrar o peer do servidor rendezvous
-                print("Registro removido com sucesso.")
-            except Exception as e:
-                print(f"Falha ao remover registro: {e}")
+                unregister(self.state)
+                print("Desregistrado com sucesso.")
+            except RendezvousError as e:
+                print(f"Erro ao desregistrar: {e}")
+        
+        if self.state:
+            self.state.set_encerrado()
+            
+        print("Programa encerrado.")
     
     def run(self):
         print("Bem-vindo ao chat P2P!")
