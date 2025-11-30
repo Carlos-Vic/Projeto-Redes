@@ -44,7 +44,6 @@ class CLI:
           ("", "  - log INFO       : Logs informativos (padrão)"),
           ("", "  - log WARNING    : Apenas avisos e erros"),
           ("", ""),
-          ("unregister", "Desregistrar do servidor rendezvous"),
           ("", ""),
           ("quit ou exit", "Sair do programa"),
           ("", ""),
