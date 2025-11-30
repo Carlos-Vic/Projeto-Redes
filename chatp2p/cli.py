@@ -175,23 +175,6 @@ class CLI:
         except RendezvousError as e:
             print(f"Falha ao descobrir peers: {e}")
     
-    def cmd_unregister(self): # Desregistra o peer do servidor rendezvous
-        if not self.state:
-            print("Estado não inicializado. Execute setup primeiro.")
-            return      
-        
-        print("Desregistrando do servidor de rendezvous...")
-        
-        try:
-            resposta = unregister(self.state) # Tenta desregistrar o peer do servidor rendezvous
-            self.registrado = False # Marca flag como desregistrado
-            print(f"Desregistrado com sucesso")
-            print(f"Status: {resposta.get('status')}")
-            print()
-            
-        except RendezvousError as e:
-            print(f"Falha ao desregistrar do servidor rendezvous: {e}")
-    
     def cmd_status(self):
         if not self.state:
             print("Estado não inicializado. Execute setup primeiro.")
@@ -430,8 +413,6 @@ class CLI:
             self.cmd_help()
         elif cmd in ['peers']:
             self.cmd_discover(args)
-        elif cmd in ['unregister']:
-            self.cmd_unregister()
         elif cmd in ['conn']:
             self.cmd_conn()
         elif cmd in ['status']:
