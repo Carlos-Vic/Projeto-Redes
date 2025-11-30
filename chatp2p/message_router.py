@@ -101,8 +101,10 @@ class MessageRouter:
 
         return False, None
 
-    def publish(self, dst: str, payload: str, ttl: int = 1):
+    def publish(self, dst: str, payload: str, ttl: int = 1) -> int:
         conexoes = self.state.get_todas_conexoes()
+        count = 0  # Contador de mensagens enviadas
+
         for peer_id, conn in conexoes.items():
             if dst == "*":
                 msg = {
@@ -114,6 +116,8 @@ class MessageRouter:
                     "ttl": ttl,
                 }
                 conn.enqueue_msg(msg)
+                logger.debug(f"[MessageRouter] PUB enviado para {peer_id} (broadcast)")
+                count += 1
             elif dst.startswith("#"):
                 ns = dst.lstrip("#")
                 parts = peer_id.split("@")
@@ -127,6 +131,20 @@ class MessageRouter:
                         "ttl": ttl,
                     }
                     conn.enqueue_msg(msg)
+                    logger.debug(f"[MessageRouter] PUB enviado para {peer_id} (namespace #{ns})")
+                    count += 1
+
+        # Log do resultado final
+        if count == 0:
+            if dst == "*":
+                logger.warning(f"[MessageRouter] PUB broadcast: nenhum peer conectado")
+            else:
+                ns = dst.lstrip("#")
+                logger.warning(f"[MessageRouter] PUB #{ns}: nenhum peer do namespace encontrado")
+        else:
+            logger.info(f"[MessageRouter] PUB {dst}: mensagem enviada para {count} peer(s)")
+
+        return count
 
     def process_incoming(self, msg: Dict[str, Any], peer_conn) -> None:
         t = msg.get("type")

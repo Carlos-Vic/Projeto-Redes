@@ -25,10 +25,13 @@ class CLI:
           ("msg <peer_id> <mensagem>", "Envia uma mensagem para um peer específico"),
           ("", "  - msg bob@geral Oi!  : Envia 'Oi!' para o peer bob@geral"),
           ("", ""),
-          ("pub <mensagem>", "Envia uma mensagem para todos os peers conectados"),
-          ("", "  - pub Olá a todos : Envia 'Olá a todos' para todos"),
+          ("pub <destino> <mensagem>", "Publica mensagem para múltiplos peers"),
+          ("", "  - pub * Olá a todos      : Broadcast para TODOS os peers"),
+          ("", "  - pub #CIC Atenção grupo : Mensagem para namespace CIC"),
           ("", ""),
           ("conn", "Mostrar conexões ativas (inbound/outbound)"),
+          ("", ""),
+          ("status", "Mostrar status de peers (conectados e com falha)"),
           ("", ""),
           ("unregister", "Desregistrar do servidor rendezvous"),
           ("", ""),
@@ -178,6 +181,50 @@ class CLI:
         except RendezvousError as e:
             print(f"Falha ao desregistrar do servidor rendezvous: {e}")
     
+    def cmd_status(self):
+        if not self.state:
+            print("Estado não inicializado. Execute setup primeiro.")
+            return
+
+        if not self.p2p_client:
+            print("P2PClient não está rodando.")
+            return
+
+        print("\n" + "="*60)
+        print("Status de Peers".center(60))
+        print("="*60)
+
+        # Conexões ativas
+        conexoes = self.state.get_todas_conexoes()
+        print(f"\nPeers conectados ({len(conexoes)}):")
+        if conexoes:
+            for peer_id in sorted(conexoes.keys()):
+                print(f"  ✓ {peer_id}")
+        else:
+            print("  (nenhum)")
+
+        # Peers com falha
+        with self.p2p_client._lock_falhas:
+            falhas = self.p2p_client._peers_com_falha.copy()
+
+        print(f"\nPeers com falha de conexão ({len(falhas)}):")
+        if falhas:
+            import time
+            for peer_id, info in sorted(falhas.items()):
+                tentativas = info['tentativas']
+                backoff_min = min(2 ** (tentativas - 1), 30)
+                tempo_desde = int(time.time() - info['timestamp'])
+                tempo_restante = max(0, (backoff_min * 60) - tempo_desde)
+
+                mins = tempo_restante // 60
+                secs = tempo_restante % 60
+
+                print(f"  ✗ {peer_id} - Próxima tentativa em {mins}m{secs}s (tentativa #{tentativas})")
+        else:
+            print("  (nenhum)")
+
+        print("="*60 + "\n")
+
     def cmd_conn(self):
         if not self.state:
             print("Estado não inicializado. Use o comando 'setup' primeiro.")
@@ -236,18 +283,49 @@ class CLI:
             print("Estado não inicializado. Use o comando 'setup' primeiro.")
             return
 
-        if not args:
-            print("Uso: pub <mensagem>")
+        if len(args) < 2:
+            print("Uso: pub <destino> <mensagem>")
+            print("  pub * <mensagem>          - Broadcast para todos os peers")
+            print("  pub #namespace <mensagem> - Enviar para todos do namespace")
             return
 
-        message = " ".join(args)
+        destino = args[0]  # Primeiro argumento é o destino (* ou #namespace)
+        message = " ".join(args[1:])  # Resto é a mensagem
+
+        # Valida o formato do destino
+        if destino != "*" and not destino.startswith("#"):
+            print("ERRO: Destino deve ser '*' (broadcast) ou '#namespace' (namespace-cast)")
+            print("Exemplos:")
+            print("  pub * Olá a todos!")
+            print("  pub #CIC Mensagem para o namespace CIC")
+            return
+
         router = self.state.get_message_router()
         if not router:
             print("Erro: Roteador de mensagens não está disponível.")
             return
 
-        print("Publicando mensagem para todos os peers...")
-        router.publish("*", message)
+        if destino == "*":
+            print("Publicando mensagem para TODOS os peers...")
+        else:
+            namespace = destino[1:]  # Remove o '#'
+            print(f"Publicando mensagem para peers do namespace '{namespace}'...")
+
+        # Envia a mensagem e recebe quantidade de peers que receberam
+        count = router.publish(destino, message)
+
+        # Feedback para o usuário
+        if count == 0:
+            if destino == "*":
+                print("Nenhum peer conectado para receber a mensagem.")
+            else:
+                namespace = destino[1:]
+                print(f"Nenhum peer do namespace '{namespace}' está conectado.")
+                print(f"O namespace pode não existir ou não há peers conectados nele.")
+        elif count == 1:
+            print(f"Mensagem enviada para {count} peer.")
+        else:
+            print(f"Mensagem enviada para {count} peers.")
             
     def processa_comando(self, comando): # Processa o comando digitado pelo usuário
 
@@ -268,6 +346,8 @@ class CLI:
             self.cmd_unregister()
         elif cmd in ['conn']:
             self.cmd_conn()
+        elif cmd in ['status']:
+            self.cmd_status()
         elif cmd in ['msg']:
             self.cmd_msg(args)
         elif cmd in ['pub']:
