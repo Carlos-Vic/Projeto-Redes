@@ -249,11 +249,13 @@ class PeerConnection:
                 if not chunk:
                     raise PeerConnectionError("Conexão fechada pelo peer")
                 buffer += chunk
-                
+
                 if len(buffer) > tamanho_maximo:
                     raise PeerConnectionError(f"Mensagem recebida excede tamanho máximo de {tamanho_maximo} bytes")
-            
-            msg_linha = buffer.decode('utf-8').strip()
+
+            # Separa a primeira linha (até o \n) do resto do buffer
+            primeira_linha, _, resto = buffer.partition(b'\n')
+            msg_linha = primeira_linha.decode('utf-8').strip()
             msg = json.loads(msg_linha)
             
             logger.debug(f"[PeerConnection] Mensagem recebida de {self.peer_id_remoto}: {msg.get('type')}")
