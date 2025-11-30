@@ -191,7 +191,9 @@ def unregister(state) -> Dict[str, Any]:
     # dicionário com o comando UNREGISTER
     comando = {
         "type": "UNREGISTER",
-        "peer_id": state.get_peer_info(),
+        "namespace": state.namespace,
+        "name": state.name,
+        "port": state.port
     }
     
     try:
