@@ -125,13 +125,24 @@ class P2PClient:
                 del self._peers_com_falha[peer_id]
                 logger.debug(f"[P2PClient] Peer {peer_id} removido da lista de falhas")
 
+    def _tentar_conectar_thread(self, peer: Dict[str, Any]):
+        """Thread auxiliar para tentar conectar com um peer em paralelo"""
+        peer_id_remoto = f"{peer['name']}@{peer['namespace']}"
+        sucesso = self.conectar_com_peer(peer)
+        if not sucesso:
+            self._registra_falha_conexao(peer_id_remoto)
+
     def _loop_discover(self):
         intervalo = self.state.get_config("rendezvous", "discover_interval")
+        max_threads_simultaneas = 10  # Limite de threads simultâneas
 
         while self._rodando.is_set():
             try:
                 peers = discover(self.state)
                 meu_peer_id = self.state.peer_id
+
+                # Lista de threads para conexões em paralelo
+                threads_conexao = []
 
                 for peer in peers:
                     peer_id_remoto = f"{peer['name']}@{peer['namespace']}"
@@ -148,10 +159,26 @@ class P2PClient:
                     if not self._deve_tentar_conectar(peer_id_remoto):
                         continue
 
-                    # Tenta conectar
-                    sucesso = self.conectar_com_peer(peer)
-                    if not sucesso:
-                        self._registra_falha_conexao(peer_id_remoto)
+                    # Cria thread para conectar em paralelo
+                    thread = threading.Thread(
+                        target=self._tentar_conectar_thread,
+                        args=(peer,),
+                        daemon=True
+                    )
+                    threads_conexao.append(thread)
+                    thread.start()
+
+                    # Limita threads simultâneas
+                    if len(threads_conexao) >= max_threads_simultaneas:
+                        # Aguarda algumas threads terminarem antes de criar novas
+                        for t in threads_conexao[:5]:
+                            t.join(timeout=1)
+                        # Remove threads que já terminaram
+                        threads_conexao = [t for t in threads_conexao if t.is_alive()]
+
+                # Aguarda todas as threads restantes terminarem (com timeout)
+                for thread in threads_conexao:
+                    thread.join(timeout=30)
 
             except RendezvousError as e:
                 logger.error(f"[P2PClient] Erro no discover automático {e}")
