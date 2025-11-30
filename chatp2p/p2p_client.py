@@ -68,6 +68,21 @@ class P2PClient:
         logger.debug("[P2PClient] Parando P2PClient...")
 
         try:
+            # Envia BYE para todos os peers conectados antes de fechar
+            conexoes = self.state.get_todas_conexoes()
+            if conexoes:
+                logger.info(f"[P2PClient] Enviando BYE para {len(conexoes)} peer(s)...")
+                for peer_id, conexao in conexoes.items():
+                    try:
+                        conexao.envia_bye(reason="Encerrando aplicação")
+                    except Exception as e:
+                        logger.debug(f"[P2PClient] Erro ao enviar BYE para {peer_id}: {e}")
+
+                # Aguarda brevemente para dar tempo dos BYEs serem enviados
+                # e dos BYE_OKs serem recebidos (timeout de 2 segundos)
+                logger.debug("[P2PClient] Aguardando envio de BYEs...")
+                time.sleep(2)
+
             if self.peer_server:
                 self.peer_server.stop()
                 logger.debug("[P2PClient] PeerServer parado")
