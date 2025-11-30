@@ -5,7 +5,8 @@ import logging
 from typing import Dict, Any, List
 from peer_server import PeerServer
 from peer_connection import PeerConnection, PeerConnectionError
-from rendezvous_connection import discover, register, RendezvousError
+from message_router import MessageRouter
+from rendezvous_connection import discover, register, unregister, RendezvousError
 
 logger = logging.getLogger(__name__)
 
@@ -140,21 +141,29 @@ class P2PClient:
 
 
     def conectar_com_peer(self, peer_info: Dict[str, Any]) -> bool:
-        ip = peer_info.get("ip")
+        ip_remoto = peer_info.get("ip")
         porta = peer_info.get("port")
         peer_id_remoto = f"{peer_info['name']}@{peer_info['namespace']}"
-        
+
+        # Se o IP público do peer remoto é o mesmo que o nosso, estamos na mesma rede.
+        # Usamos 127.0.0.1 para permitir testes na mesma máquina (NAT loopback).
+        if self.state.public_ip and ip_remoto == self.state.public_ip:
+            logger.info(f"[P2PClient] Peer {peer_id_remoto} está na mesma rede. Usando 127.0.0.1 para conexão.")
+            ip_conexao = "127.0.0.1"
+        else:
+            ip_conexao = ip_remoto
+
         max_tentativas = self.state.get_config("peer_connection", "retry_attempts")
         backoff_base = self.state.get_config("peer_connection", "backoff_base")
         timeout = self.state.get_config("network", "connection_timeout")
         
         for tentativas in range(max_tentativas):
             try:
-                logger.debug(f"[P2PClient] Tentando conectar com {peer_id_remoto} em {ip}:{porta} (tentativa {tentativas + 1}/{max_tentativas})")
+                logger.debug(f"[P2PClient] Tentando conectar com {peer_id_remoto} em {ip_conexao}:{porta} (tentativa {tentativas + 1}/{max_tentativas})")
                 
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 sock.settimeout(timeout)
-                sock.connect((ip, porta))
+                sock.connect((ip_conexao, porta))
                 conexao = PeerConnection(sock, peer_id_remoto, self.state, foi_iniciado=True)
                 
                 if not conexao.handshake_iniciador():

@@ -16,11 +16,12 @@ class MessageRouter:
     - process_incoming() deve ser chamado por PeerConnection ao receber SEND/ACK/PUB
     - callbacks: lista de funções (src, payload, meta)
     """
+
     def __init__(self, state):
         self.state = state
         self._pending_acks: Dict[str, Dict[str, Any]] = {}
-    self._lock = threading.Lock()
-    self._callbacks: List[Callable[[str, str, Dict[str, Any]], None]] = []
+        self._lock = threading.Lock()
+        self._callbacks: List[Callable[[str, str, Dict[str, Any]], None]] = []
 
     def register_receive_callback(self, cb: Callable[[str, str, Dict[str, Any]], None]):
         self._callbacks.append(cb)
@@ -32,8 +33,15 @@ class MessageRouter:
             except Exception:
                 logger.exception("Erro no callback de recebimento de mensagem")
 
-    def send(self, dst: str, payload: str, require_ack: bool = True, ttl: int = 1,
-             timeout: Optional[float] = None, retries: Optional[int] = None) -> Tuple[bool, Optional[Dict[str, Any]]]:
+    def send(
+        self,
+        dst: str,
+        payload: str,
+        require_ack: bool = True,
+        ttl: int = 1,
+        timeout: Optional[float] = None,
+        retries: Optional[int] = None,
+    ) -> Tuple[bool, Optional[Dict[str, Any]]]:
         cfg_timeout = self.state.get_config("network", "ack_timeout") or 5
         cfg_retries = self.state.get_config("message_router", "max_retries") or 2
 
@@ -56,10 +64,7 @@ class MessageRouter:
             "ttl": ttl,
         }
 
-        pending = {
-            "event": threading.Event(),
-            "response": None,
-        }
+        pending = {"event": threading.Event(), "response": None}
 
         with self._lock:
             self._pending_acks[msg_id] = pending
@@ -67,7 +72,7 @@ class MessageRouter:
         attempt = 0
         while attempt <= retries:
             try:
-                logger.debug(f"[MessageRouter] Enviando SEND {msg_id} para {dst} (attempt {attempt + 1})")
+                logger.debug(f"[MessageRouter] Enviando SEND {msg_id} para {dst} (tentativa {attempt + 1})")
                 peer_conn.enqueue_msg(msg)
 
                 ok = pending["event"].wait(timeout)
@@ -83,9 +88,10 @@ class MessageRouter:
                         logger.info(f"[MessageRouter] Timeout aguardando ACK, retry em {backoff}s")
                         time.sleep(backoff)
                     else:
-                        logger.warning(f"[MessageRouter] Falha: ACK não recebido para {msg_id} após {retries + 1} tentativas")
+                        logger.warning(
+                            f"[MessageRouter] Falha: ACK não recebido para {msg_id} após {retries + 1} tentativas"
+                        )
                         break
-
             except Exception as e:
                 logger.exception(f"[MessageRouter] Erro ao enviar SEND para {dst}: {e}")
                 break
@@ -96,10 +102,9 @@ class MessageRouter:
         return False, None
 
     def publish(self, dst: str, payload: str, ttl: int = 1):
-        # dst: '*' para todos, '#NAMESPACE' para namespace
         conexoes = self.state.get_todas_conexoes()
         for peer_id, conn in conexoes.items():
-            if dst == '*':
+            if dst == "*":
                 msg = {
                     "type": "PUB",
                     "msg_id": str(uuid.uuid4()),
@@ -109,10 +114,9 @@ class MessageRouter:
                     "ttl": ttl,
                 }
                 conn.enqueue_msg(msg)
-            elif dst.startswith('#'):
-                ns = dst.lstrip('#')
-                # peer_id format: name@namespace
-                parts = peer_id.split('@')
+            elif dst.startswith("#"):
+                ns = dst.lstrip("#")
+                parts = peer_id.split("@")
                 if len(parts) == 2 and parts[1] == ns:
                     msg = {
                         "type": "PUB",
@@ -142,10 +146,8 @@ class MessageRouter:
                 payload = msg.get("payload")
                 require_ack = msg.get("require_ack", False)
 
-                # entregar ao aplicativo
                 self._notify_receive(src, payload, {"type": "SEND", "msg": msg})
 
-                # enviar ACK se necessário
                 if require_ack:
                     ack = {
                         "type": "ACK",
@@ -163,7 +165,6 @@ class MessageRouter:
             elif t == "PUB":
                 src = msg.get("src")
                 payload = msg.get("payload")
-                # entregar ao aplicativo
                 self._notify_receive(src, payload, {"type": "PUB", "msg": msg})
 
             else:

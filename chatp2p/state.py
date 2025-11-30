@@ -18,6 +18,7 @@ class State:
         self.port: Optional[int] = None
         self.ttl: Optional[int] = None
         self.peer_id: Optional[str] = None
+        self.public_ip: Optional[str] = None # IP público do peer, conforme visto pelo servidor
         self.tempo_ultimo_registro: Optional[datetime] = None # Último horário de registro no servidor (para controlar o TTL no servidor rdzv)
 
         # Controle de re-registro automático (valores confirmados pelo servidor)
@@ -25,6 +26,8 @@ class State:
         self.timestamp_registro: Optional[float] = None  # Timestamp Unix do último REGISTER bem-sucedido
         
         self._conexoes: Dict[str, Any] = {} # Dicionário de conexões ativas {peer_id: PeerConnection}
+        
+        self._message_router: Optional[Any] = None # Roteador de mensagens
         
         self._flag_encerrado = threading.Event() # Flag para indicar se o programa está sendo encerrado
         

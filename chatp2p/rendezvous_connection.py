@@ -107,8 +107,9 @@ def register(state, retry: bool = True) -> Dict[str, Any]:
     # dicionário com o comando REGISTER
     comando = {
         "type": "REGISTER",
-        "namespace": state.namespace,
+        "peer_id": state.get_peer_info(),
         "name": state.name,
+        "namespace": state.namespace,
         "port": state.port,
         "ttl": ttl
     }
@@ -190,9 +191,7 @@ def unregister(state) -> Dict[str, Any]:
     # dicionário com o comando UNREGISTER
     comando = {
         "type": "UNREGISTER",
-        "namespace": state.namespace,
-        "name": state.name,
-        "port": state.port
+        "peer_id": state.get_peer_info(),
     }
     
     try:
@@ -204,4 +203,4 @@ def unregister(state) -> Dict[str, Any]:
     
     except RendezvousError as e: # Erro
         logger.error(f"[Rendezvous] UNREGISTER falhou: {e}")
-        raise   
+        raise
