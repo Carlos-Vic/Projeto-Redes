@@ -3,8 +3,6 @@ import json
 import sys
 
 def configurar_logging(config_path="config.json"):
-    """Configura o sistema de logging baseado no config.json"""
-
     # Carregar configurações do JSON
     with open(config_path, 'r', encoding='utf-8') as f:
         config = json.load(f)
