@@ -68,6 +68,7 @@ class State:
             return max(0, int(tempo_restante))
     
     def adiciona_conexao(self, peer_id: str, conexao):
+        # Adiciona uma conexão ativa ao dicionário de conexões (thread-safe)
         with self._lock:
             self._conexoes[peer_id] = conexao
             logger.info(f"[State] Conexão adicionada: {peer_id}")
@@ -108,19 +109,21 @@ class State:
         return self._flag_encerrado.is_set()
     
     def get_config(self, *keys) -> Any:
+        # Navega por chaves aninhadas no config.json (ex: get_config("network", "timeout"))
         value = self.config
         for key in keys:
             if isinstance(value, dict) and key in value:
                 value = value[key]
             else:
-                return None
+                return None  # Retorna None se chave não existir
         return value
 
-    # MessageRouter storage (opcional)
     def set_message_router(self, router):
+        # Armazena instância do MessageRouter no state (thread-safe)
         with self._lock:
             self._message_router = router
 
     def get_message_router(self):
+        # Retorna instância do MessageRouter ou None se não configurado (thread-safe)
         with self._lock:
             return getattr(self, "_message_router", None)

@@ -7,28 +7,30 @@ logger = logging.getLogger(__name__)
 
 class KeepAlive:
     def __init__(self, conexao, state):
-        self.conexao = conexao
-        self.state = state
-        self._falhas = 0
-        self._pings_pendentes = {}
-        self._rodando = threading.Event()
-        self._thread_keep_alive = None
+        self.conexao = conexao  # Referência para a conexão peer
+        self.state = state  # Referência para o estado compartilhado
+        self._falhas = 0  # Contador de PINGs sem resposta consecutivos
+        self._pings_pendentes = {}  # Dicionário {msg_id: timestamp} de PINGs aguardando PONG
+        self._rodando = threading.Event()  # Flag para indicar se KeepAlive está rodando
+        self._thread_keep_alive = None  # Thread que executa o loop de PING
         self._rtts = []  # Armazena os últimos RTTs (em ms)
         self._max_rtts = 10  # Mantém apenas os últimos 10 RTTs      
         
     def start(self):
+        # Inicia thread de KeepAlive que envia PING a cada intervalo configurado
         try:
-            self._rodando.set()
-            
+            self._rodando.set()  # Marca KeepAlive como rodando
+
+            # Cria thread daemon que executará o loop de PING
             self._thread_keep_alive = threading.Thread(
                 target=self._loop_ping,
                 name=f"KeepAlive-{self.conexao.peer_id_remoto}",
                 daemon=True
             )
             self._thread_keep_alive.start()
-            
+
             logger.debug(f"[KeepAlive] KeepAlive iniciado para {self.conexao.peer_id_remoto}")
-        
+
         except Exception as e:
             logger.error(f"[KeepAlive] Falha ao iniciar KeepAlive para {self.conexao.peer_id_remoto}: {e}")
             raise
@@ -101,11 +103,11 @@ class KeepAlive:
             logger.error(f"[KeepAlive] Erro ao processar pong de {self.conexao.peer_id_remoto}: {e}")
 
     def get_rtt_medio(self):
-        """Retorna o RTT médio dos últimos pings (em ms)"""
+        # Retorna o RTT médio dos últimos pings (em ms) ou None se não houver amostras
         if not self._rtts:
             return None
         return sum(self._rtts) / len(self._rtts)
 
     def get_quantidade_pings(self):
-        """Retorna a quantidade de RTTs armazenados"""
+        # Retorna a quantidade de RTTs armazenados (número de amostras)
         return len(self._rtts)   

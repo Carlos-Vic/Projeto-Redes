@@ -23,10 +23,11 @@ class RendezvousConnectionError(RendezvousError):
 
 
 def _envia_comando(host: str, port: int, command: Dict[str, Any], timeout: int = 10):
+    # Envia comando JSON para servidor Rendezvous via TCP e retorna resposta
     sock = None
     try:
-        comando_json = json.dumps(command, ensure_ascii=False) # Converte o comando de dicionário pra json
-        comando_bytes = (comando_json + "\n").encode("utf-8") # Adiciona newline e converte para bytes para ser enviado pelo socket
+        comando_json = json.dumps(command, ensure_ascii=False)  # Converte o comando de dicionário pra json
+        comando_bytes = (comando_json + "\n").encode("utf-8")  # Adiciona newline e converte para bytes para ser enviado pelo socket
         
         if len(comando_bytes) > 32768:
             raise RendezvousError(f"Comando excede 32 KB: {len(comando_bytes)} bytes") # Erro se o comando for muito grande
@@ -55,9 +56,9 @@ def _envia_comando(host: str, port: int, command: Dict[str, Any], timeout: int =
         try:
             while b'\n' not in resposta_servidor: # Loop para receber bytes no buffer até encontrar newline
                 chunk = sock.recv(4096) # Recebe até 4096 bytes (Pode mudar no futuro, usei 4096 como valor pq vi na internet :P)
-                if not chunk: # Se o chunk estiver vazio, a conexão foi fechada
+                if not chunk:  # Se o chunk estiver vazio, a conexão foi fechada
                     raise RendezvousConnectionError("Conexão fechada pelo servidor antes de receber a resposta completa")
-                resposta_servidor += chunk # Adiciona os bytes recebidos ao buffer
+                resposta_servidor += chunk  # Adiciona os bytes recebidos ao buffer
                 #print(resposta_servidor) # DEBUG para ver qual resposta ta chegando (lembrar de tirar depois)
             
         except socket.timeout: # Timeout ao receber dados
@@ -81,7 +82,7 @@ def _envia_comando(host: str, port: int, command: Dict[str, Any], timeout: int =
             raise RendezvousServerErro(error_msg, resposta_json.get('details', ''))
         
         #print(resposta_json)  # DEBUG para ver a resposta JSON completa (lembrar de tirar depois)
-        return resposta_json # retorna a resposta JSON do servidor
+        return resposta_json  # retorna a resposta JSON do servidor
     
     # Garante que o socket será fechado no final
     finally:
@@ -93,6 +94,7 @@ def _envia_comando(host: str, port: int, command: Dict[str, Any], timeout: int =
                 pass
 
 def register(state, retry: bool = True) -> Dict[str, Any]:
+    # Registra peer no servidor Rendezvous com retry e backoff exponencial
     # Obtém as configurações no state
     host = state.get_config("rendezvous", "host")
     porta = state.get_config("rendezvous", "port")
@@ -157,6 +159,7 @@ def register(state, retry: bool = True) -> Dict[str, Any]:
         raise RendezvousError("REGISTER falhou: nenhuma tentativa foi executada")
 
 def discover(state, namespace: Optional[str] = None) -> List[Dict[str, Any]]:
+    # Descobre peers registrados no servidor Rendezvous (todos ou filtrado por namespace)
     # Obtém as configurações no state
     host = state.get_config("rendezvous", "host")
     porta = state.get_config("rendezvous", "port")
@@ -183,6 +186,7 @@ def discover(state, namespace: Optional[str] = None) -> List[Dict[str, Any]]:
         raise
 
 def unregister(state) -> Dict[str, Any]:
+    # Remove registro do peer do servidor Rendezvous (chamado ao sair do programa)
     # Obtém as configurações no state
     host = state.get_config("rendezvous", "host")
     porta = state.get_config("rendezvous", "port")

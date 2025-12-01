@@ -15,6 +15,7 @@ class CLI:
     
     
     def cmd_help(self):
+        # Exibe a lista de comandos disponíveis no CLI
         print("\n" + "="*60)
         print("Comandos disponíveis".center(60))
         print("="*60)
@@ -175,6 +176,7 @@ class CLI:
             print(f"Falha ao descobrir peers: {e}")
     
     def cmd_status(self):
+        # Exibe status de peers conectados e peers com falha de conexão (com backoff countdown)
         if not self.state:
             print("Estado não inicializado. Execute setup primeiro.")
             return
@@ -187,7 +189,7 @@ class CLI:
         print("Status de Peers".center(60))
         print("="*60)
 
-        # Conexões ativas
+        # Lista peers conectados com sucesso
         conexoes = self.state.get_todas_conexoes()
         print(f"\nPeers conectados ({len(conexoes)}):")
         if conexoes:
@@ -196,7 +198,7 @@ class CLI:
         else:
             print("  (nenhum)")
 
-        # Peers com falha
+        # Lista peers com falha de conexão e tempo restante para próxima tentativa
         with self.p2p_client._lock_falhas:
             falhas = self.p2p_client._peers_com_falha.copy()
 
@@ -205,10 +207,11 @@ class CLI:
             import time
             for peer_id, info in sorted(falhas.items()):
                 tentativas = info['tentativas']
-                backoff_min = min(2 ** (tentativas - 1), 30)
+                backoff_min = min(2 ** (tentativas - 1), 30)  # Backoff exponencial
                 tempo_desde = int(time.time() - info['timestamp'])
                 tempo_restante = max(0, (backoff_min * 60) - tempo_desde)
 
+                # Converte tempo restante para minutos e segundos
                 mins = tempo_restante // 60
                 secs = tempo_restante % 60
 
@@ -219,7 +222,7 @@ class CLI:
         print("="*60 + "\n")
 
     def cmd_rtt(self):
-        """Exibe o RTT (Round Trip Time) de cada peer conectado"""
+        # Exibe o RTT (Round Trip Time) de cada peer conectado
         if not self.state:
             print("Estado não inicializado. Execute setup primeiro.")
             return
@@ -238,40 +241,42 @@ class CLI:
         print(f"\n{'Peer ID':<25} {'RTT Médio':<15} {'Amostras':<10}")
         print("-"*60)
 
+        # Itera sobre conexões e exibe RTT se KeepAlive estiver ativo
         for peer_id, conn in sorted(conexoes.items()):
             if hasattr(conn, 'keep_alive') and conn.keep_alive:
-                rtt_medio = conn.keep_alive.get_rtt_medio()
-                quantidade = conn.keep_alive.get_quantidade_pings()
+                rtt_medio = conn.keep_alive.get_rtt_medio()  # RTT médio em ms
+                quantidade = conn.keep_alive.get_quantidade_pings()  # Quantidade de amostras
 
                 if rtt_medio is not None:
                     print(f"{peer_id:<25} {rtt_medio:>8.2f} ms     {quantidade:<10}")
                 else:
                     print(f"{peer_id:<25} {'N/A':<15} {0:<10}")
             else:
+                # Conexões inbound não têm KeepAlive (apenas outbound envia PING)
                 print(f"{peer_id:<25} {'N/A':<15} {0:<10}")
 
         print("="*60 + "\n")
 
     def cmd_reconnect(self):
-        """Força reconciliação de peers (limpa falhas e redescobre)"""
+        # Força reconciliação de peers (limpa falhas e redescobre)
         if not self.p2p_client:
             print("P2PClient não está rodando.")
             return
 
         print("Forçando reconciliação de peers...")
 
-        # Limpa lista de falhas
+        # Limpa lista de peers com falha (reseta backoff)
         count_falhas = self.p2p_client.limpar_todas_falhas()
         print(f"- {count_falhas} peer(s) removido(s) da lista de falhas")
 
-        # Força discover imediato
+        # Força discover imediato e tenta conectar com todos
         count_tentativas = self.p2p_client.forcar_discover()
         print(f"- {count_tentativas} tentativa(s) de conexão iniciada(s)")
 
         print("Reconciliação concluída!")
 
     def cmd_log(self, args):
-        """Ajusta o nível de log em runtime"""
+        # Ajusta o nível de log em runtime (DEBUG, INFO, WARNING, ERROR, CRITICAL)
         if not args:
             print("Uso: log <NÍVEL>")
             print("Níveis disponíveis: DEBUG, INFO, WARNING, ERROR, CRITICAL")
@@ -286,31 +291,36 @@ class CLI:
             'CRITICAL': logging.CRITICAL
         }
 
+        # Valida se o nível fornecido é válido
         if nivel_str not in niveis_validos:
             print(f"Nível inválido: {nivel_str}")
             print("Níveis disponíveis: DEBUG, INFO, WARNING, ERROR, CRITICAL")
             return
 
-        # Ajusta o nível do logger raiz (afeta todos os módulos)
+        # Ajusta o nível do logger raiz (afeta todos os módulos do projeto)
         logging.getLogger().setLevel(niveis_validos[nivel_str])
         print(f"Nível de log ajustado para: {nivel_str}")
 
     def cmd_conn(self):
+        # Mostra conexões ativas separadas por outbound (você iniciou) e inbound (outros iniciaram)
         if not self.state:
             print("Estado não inicializado. Use o comando 'setup' primeiro.")
             return
-        
-        conexoes = self.state.get_todas_conexoes() # Obtém todas as conexões ativas do estado
-        
+
+        conexoes = self.state.get_todas_conexoes()  # Obtém todas as conexões ativas do estado
+
         print("Conexões ativas:")
         outbounds = {}
         inbounds = {}
-        
+
+        # Separa conexões por direção (outbound vs inbound)
         for peer_id, conexao in conexoes.items():
             if conexao.foi_iniciado:
-                outbounds[peer_id] = conexao
+                outbounds[peer_id] = conexao  # Você conectou ao peer (você é cliente)
             else:
-                inbounds[peer_id] = conexao
+                inbounds[peer_id] = conexao  # Peer conectou a você (você é servidor)
+
+        # Lista conexões outbound
         print("Outbound connections:")
         if outbounds:
             for peer_id, conexao in outbounds.items():
@@ -318,6 +328,7 @@ class CLI:
         else:
             print("  (nenhuma)")
 
+        # Lista conexões inbound
         print("Inbound connections:")
         if inbounds:
             for peer_id, conexao in inbounds.items():
@@ -326,22 +337,26 @@ class CLI:
             print("  (nenhuma)")
             
     def cmd_msg(self, args):
+        # Envia mensagem unicast (SEND) para um peer específico e aguarda ACK
         if not self.state:
             print("Estado não inicializado. Use o comando 'setup' primeiro.")
             return
 
+        # Valida argumentos (precisa de peer_id e mensagem)
         if len(args) < 2:
             print("Uso: msg <peer_id> <mensagem>")
             return
 
-        peer_id = args[0]
-        message = " ".join(args[1:])
+        peer_id = args[0]  # Primeiro argumento é o peer_id (ex: alice@CIC)
+        message = " ".join(args[1:])  # Resto é a mensagem
 
+        # Obtém o MessageRouter do state
         router = self.state.get_message_router()
         if not router:
             print("Erro: Roteador de mensagens não está disponível.")
             return
 
+        # Envia mensagem SEND e aguarda ACK (com retry e timeout)
         print(f"Enviando mensagem para {peer_id}...")
         if router.send(peer_id, message):
             print("Mensagem enviada e confirmada (ACK recebido).")
@@ -349,10 +364,12 @@ class CLI:
             print("Falha ao enviar mensagem. O peer pode estar offline ou não respondeu.")
 
     def cmd_pub(self, args):
+        # Envia mensagem broadcast (*) ou namespace-cast (#namespace) sem ACK
         if not self.state:
             print("Estado não inicializado. Use o comando 'setup' primeiro.")
             return
 
+        # Valida argumentos (precisa de destino e mensagem)
         if len(args) < 2:
             print("Uso: pub <destino> <mensagem>")
             print("  pub * <mensagem>          - Broadcast para todos os peers")
@@ -362,7 +379,7 @@ class CLI:
         destino = args[0]  # Primeiro argumento é o destino (* ou #namespace)
         message = " ".join(args[1:])  # Resto é a mensagem
 
-        # Valida o formato do destino
+        # Valida o formato do destino (deve ser * ou começar com #)
         if destino != "*" and not destino.startswith("#"):
             print("ERRO: Destino deve ser '*' (broadcast) ou '#namespace' (namespace-cast)")
             print("Exemplos:")
@@ -370,21 +387,23 @@ class CLI:
             print("  pub #CIC Mensagem para o namespace CIC")
             return
 
+        # Obtém o MessageRouter do state
         router = self.state.get_message_router()
         if not router:
             print("Erro: Roteador de mensagens não está disponível.")
             return
 
+        # Exibe mensagem apropriada dependendo do tipo de publicação
         if destino == "*":
             print("Publicando mensagem para TODOS os peers...")
         else:
             namespace = destino[1:]  # Remove o '#'
             print(f"Publicando mensagem para peers do namespace '{namespace}'...")
 
-        # Envia a mensagem e recebe quantidade de peers que receberam
+        # Envia a mensagem PUB e recebe quantidade de peers que receberam
         count = router.publish(destino, message)
 
-        # Feedback para o usuário
+        # Feedback para o usuário baseado na quantidade de peers alcançados
         if count == 0:
             if destino == "*":
                 print("Nenhum peer conectado para receber a mensagem.")
@@ -449,18 +468,22 @@ class CLI:
         print("Programa encerrado.")
     
     def run(self):
+        # Ponto de entrada principal do CLI: setup, registro, inicialização e loop de comandos
         print("Bem-vindo ao chat P2P!")
-        
+
+        # Etapa 1: Configura estado inicial (namespace, nome, porta, TTL)
         self.cmd_setup()
         if not self.state:
             print("Estado não configurado. Saindo...")
             return
-        
+
+        # Etapa 2: Registra no servidor Rendezvous
         self.cmd_registrar()
         if not self.registrado:
             print("Não foi possível registrar. Saindo...")
             return
 
+        # Etapa 3: Inicia cliente P2P (servidor TCP, discover automático, re-registro)
         print("Iniciando servidor P2P e conexões automáticas...")
         try:
             self.p2p_client = P2PClient(self.state)
@@ -469,25 +492,25 @@ class CLI:
         except Exception as e:
             print(f"Falha ao iniciar servidor P2P: {e}")
             return
-        
+
         print()
         print("Digite 'help' para ver os comandos disponíveis.")
         print()
-        
-        
+
+        # Loop principal do CLI: lê comandos do usuário e executa
         try:
-            while True: # Loop principal do CLI
+            while True:
                try:
-                    comando = input("chatp2p> ") # Pede o comando ao usuário
-                    if not self.processa_comando(comando): # Processa o comando
+                    comando = input("chatp2p> ")  # Prompt para comando do usuário
+                    if not self.processa_comando(comando):  # Processa comando (retorna False se quit/exit)
                         break
-               except EOFError: # Trata EOF (Ctrl+D)
+               except EOFError:  # Trata EOF (Ctrl+D)
                    print("\n")
                    break
-               
-        except (KeyboardInterrupt, EOFError): # Trata Ctrl+C e EOF
+
+        except (KeyboardInterrupt, EOFError):  # Trata Ctrl+C e EOF
             print("\nSaindo...")
-        
-        finally: # Limpa o estado antes de sair
+
+        finally:  # Cleanup: para P2P client, desregistra do Rendezvous
             self.limpar()
             print("Até logo!")

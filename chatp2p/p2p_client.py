@@ -12,23 +12,26 @@ logger = logging.getLogger(__name__)
 
 class P2PClient:
     def __init__(self, state):
-        self.state = state
-        self.peer_server = None
-        self._rodando = threading.Event()
-        self._thread_discover = None
-        self._thread_reregister = None
+        self.state = state  # Referência para o estado compartilhado
+        self.peer_server = None  # Servidor TCP para aceitar conexões inbound
+        self._rodando = threading.Event()  # Flag para indicar se o cliente P2P está rodando
+        self._thread_discover = None  # Thread para discover automático de peers
+        self._thread_reregister = None  # Thread para re-registro automático no Rendezvous
 
-        # Rastreamento de peers com falha de conexão
+        # Rastreamento de peers com falha de conexão para implementar backoff exponencial
         self._peers_com_falha = {}  # {peer_id: {'timestamp': float, 'tentativas': int}}
-        self._lock_falhas = threading.Lock()
+        self._lock_falhas = threading.Lock()  # Lock para acesso thread-safe ao dicionário de falhas
 
 
     def start(self):
+        # Inicia o cliente P2P: servidor TCP, message router e threads de discover/re-registro
         try:
+            # Cria e inicia servidor TCP para aceitar conexões inbound de outros peers
             self.peer_server = PeerServer(self.state)
             self.peer_server.start()
             logger.debug(f"[P2PClient] PeerServer iniciado na porta {self.state.port}")
-            # Instancia e registra o MessageRouter no state
+
+            # Instancia e registra o MessageRouter no state para gerenciar SEND/ACK/PUB
             try:
                 router = MessageRouter(self.state)
                 self.state.set_message_router(router)
@@ -42,14 +45,17 @@ class P2PClient:
             except Exception:
                 logger.exception("[P2PClient] Falha ao criar MessageRouter")
 
+            # Marca o cliente como rodando
             self._rodando.set()
 
+            # Cria e inicia thread de discover automático (busca peers a cada 60s)
             self._thread_discover = threading.Thread(target=self._loop_discover,
                                                     name="P2PClient_Discover",
                                                     daemon=True)
             self._thread_discover.start()
             logger.debug("[P2PClient] Loop de discover iniciado")
 
+            # Cria e inicia thread de re-registro automático (renova TTL antes de expirar)
             self._thread_reregister = threading.Thread(target=self._loop_reregister,
                                                       name="P2PClient_Reregister",
                                                       daemon=True)
@@ -123,36 +129,41 @@ class P2PClient:
             return False
 
     def _registra_falha_conexao(self, peer_id: str):
+        # Registra falha de conexão com um peer e incrementa contador de tentativas
         with self._lock_falhas:
             if peer_id in self._peers_com_falha:
+                # Peer já falhou antes: incrementa tentativas e atualiza timestamp
                 self._peers_com_falha[peer_id]['tentativas'] += 1
                 self._peers_com_falha[peer_id]['timestamp'] = time.time()
             else:
+                # Primeira falha: cria entrada no dicionário
                 self._peers_com_falha[peer_id] = {'timestamp': time.time(), 'tentativas': 1}
 
+            # Calcula backoff exponencial: 2^(n-1) minutos, máximo 30 minutos
             tentativas = self._peers_com_falha[peer_id]['tentativas']
             backoff_minutos = min(2 ** (tentativas - 1), 30)
             logger.info(f"[P2PClient] Peer {peer_id} marcado como falho. Próxima tentativa em {backoff_minutos} minuto(s)")
 
     def _limpa_falha_conexao(self, peer_id: str):
+        # Remove peer da lista de falhas quando conexão é bem-sucedida
         with self._lock_falhas:
             if peer_id in self._peers_com_falha:
-                del self._peers_com_falha[peer_id]
+                del self._peers_com_falha[peer_id]  # Remove entrada do dicionário
                 logger.debug(f"[P2PClient] Peer {peer_id} removido da lista de falhas")
 
     def limpar_todas_falhas(self):
-        """Limpa a lista de peers com falha (usado pelo comando /reconnect)"""
+        # Limpa a lista de peers com falha (usado pelo comando /reconnect)
         with self._lock_falhas:
             count = len(self._peers_com_falha)
-            self._peers_com_falha.clear()
+            self._peers_com_falha.clear()  # Remove todas as entradas do dicionário
             logger.info(f"[P2PClient] Lista de falhas limpa ({count} peers removidos)")
             return count
 
     def forcar_discover(self):
-        """Força um discover imediato e tenta conectar com os peers (usado pelo comando /reconnect)"""
+        # Força um discover imediato e tenta conectar com os peers (usado pelo comando /reconnect)
         try:
             logger.info("[P2PClient] Forçando discover imediato...")
-            peers = discover(self.state)
+            peers = discover(self.state)  # Busca peers no Rendezvous
             meu_peer_id = self.state.peer_id
 
             count_tentativas = 0
@@ -160,9 +171,11 @@ class P2PClient:
             for peer in peers:
                 peer_id_remoto = f"{peer['name']}@{peer['namespace']}"
 
+                # Pula se for o próprio peer
                 if peer_id_remoto == meu_peer_id:
                     continue
 
+                # Pula se já está conectado
                 if self.state.verifica_conexao(peer_id_remoto):
                     continue
 
@@ -183,11 +196,11 @@ class P2PClient:
             return 0
 
     def _tentar_conectar_thread(self, peer: Dict[str, Any]):
-        """Thread auxiliar para tentar conectar com um peer em paralelo"""
+        # Thread auxiliar para tentar conectar com um peer em paralelo
         peer_id_remoto = f"{peer['name']}@{peer['namespace']}"
-        sucesso = self.conectar_com_peer(peer)
+        sucesso = self.conectar_com_peer(peer)  # Tenta conectar
         if not sucesso:
-            self._registra_falha_conexao(peer_id_remoto)
+            self._registra_falha_conexao(peer_id_remoto)  # Registra falha se não conectou
 
     def _loop_discover(self):
         intervalo = self.state.get_config("rendezvous", "discover_interval")
@@ -280,30 +293,36 @@ class P2PClient:
 
 
     def conectar_com_peer(self, peer_info: Dict[str, Any]) -> bool:
+        # Tenta conectar com um peer específico usando retry com backoff exponencial
         ip_remoto = peer_info.get("ip")
         porta = peer_info.get("port")
         peer_id_remoto = f"{peer_info['name']}@{peer_info['namespace']}"
 
-        ip_conexao = ip_remoto
+        ip_conexao = ip_remoto  # Usa IP retornado pelo Rendezvous
 
+        # Obtém configurações de retry e timeout do config.json
         max_tentativas = self.state.get_config("peer_connection", "retry_attempts")
         backoff_base = self.state.get_config("peer_connection", "backoff_base")
         timeout = self.state.get_config("network", "connection_timeout")
 
+        # Loop de retry: tenta conectar até max_tentativas vezes
         for tentativas in range(max_tentativas):
             try:
                 logger.debug(f"[P2PClient] Tentando conectar com {peer_id_remoto} em {ip_conexao}:{porta} (tentativa {tentativas + 1}/{max_tentativas})")
 
+                # Cria socket TCP e tenta conectar
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 sock.settimeout(timeout)
                 sock.connect((ip_conexao, porta))
                 conexao = PeerConnection(sock, peer_id_remoto, self.state, foi_iniciado=True)
 
+                # Realiza handshake HELLO/HELLO_OK
                 if not conexao.handshake_iniciador():
                     logger.warning(f"[P2PClient] Handshake falhou com {peer_id_remoto}")
                     sock.close()
-                    continue
+                    continue  # Tenta novamente
 
+                # Handshake bem-sucedido: adiciona conexão ao state e inicia threads
                 self.state.adiciona_conexao(peer_id_remoto, conexao)
                 conexao.start()
 
@@ -315,11 +334,12 @@ class P2PClient:
                 # Usa DEBUG em vez de WARNING para não poluir o terminal
                 logger.debug(f"[P2PClient] Falha ao conectar com {peer_id_remoto} (tentativa {tentativas + 1}/{max_tentativas}): {e}")
 
+                # Backoff exponencial entre tentativas (exceto na última)
                 if tentativas < max_tentativas - 1:
-                    backoff = backoff_base ** tentativas
+                    backoff = backoff_base ** tentativas  # 2^0, 2^1, 2^2...
                     logger.debug(f"[P2PClient] Aguardando {backoff}s antes de nova tentativa...")
                     time.sleep(backoff)
 
-        # Log final apenas em DEBUG para não poluir terminal
+        # Todas as tentativas falharam
         logger.debug(f"[P2PClient] Falha ao conectar com {peer_id_remoto} após {max_tentativas} tentativas.")
         return False

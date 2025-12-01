@@ -15,21 +15,24 @@ import sys
 from logger import configurar_logging
 
 def main():
+    # Ponto de entrada principal: configura logging e inicia CLI
     config_path = "config.json"  # Caminho padrão para o arquivo de configuração
-    
-    if not os.path.exists(config_path): # Verifica se o arquivo de configuração existe
+
+    # Verifica se o arquivo de configuração existe antes de prosseguir
+    if not os.path.exists(config_path):
         print(f"Arquivo de configuração não encontrado: {config_path}")
-        sys.exit(1) # Sai com código de erro 1
-        
+        sys.exit(1)  # Sai com código de erro 1
+
+    # Configura sistema de logging baseado no config.json
     configurar_logging(config_path)
-        
+
     try:
-        cli = CLI(config_path) # Inicializa a interface de linha de comando
-        cli.run()
-    except KeyboardInterrupt: # Captura interrupção do usuário (Ctrl+C)
+        cli = CLI(config_path)  # Inicializa a interface de linha de comando
+        cli.run()  # Inicia loop principal do CLI
+    except KeyboardInterrupt:  # Captura interrupção do usuário (Ctrl+C)
         print("\nPrograma encerrado pelo usuário.")
         sys.exit(0)
-    except Exception as e: # Captura qualquer outra exceção inesperada
+    except Exception as e:  # Captura qualquer outra exceção inesperada
         print(f"Erro inesperado: {e}")
         sys.exit(1)
         

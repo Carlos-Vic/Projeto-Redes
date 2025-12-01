@@ -15,11 +15,11 @@ class PeerConnectionError(Exception): # Exceção base para erros de conexão en
 
 class PeerConnection:
     def __init__(self, sock: socket.socket, peer_id_remoto: str, state, foi_iniciado: bool):
-        self.sock = sock
-        self.peer_id_remoto = peer_id_remoto
-        self.state = state
-        self.foi_iniciado = foi_iniciado
-        self.keep_alive = None
+        self.sock = sock  # Socket TCP da conexão
+        self.peer_id_remoto = peer_id_remoto  # ID do peer remoto (ex: alice@CIC)
+        self.state = state  # Referência para o estado compartilhado
+        self.foi_iniciado = foi_iniciado  # True se você iniciou a conexão (outbound), False se recebeu (inbound)
+        self.keep_alive = None  # Instância de KeepAlive (apenas para conexões outbound)
         
         # Extrair IP e porta remotos
         try:
@@ -118,19 +118,20 @@ class PeerConnection:
             logger.error(f"[PeerConnection] Erro no handshake com {self.peer_id_remoto}: {e}")
             return False
         
-    def envia_ping(self) -> str:      
-        msg_id = str(uuid.uuid4()) # Gera um ID único para a mensagem
-        
+    def envia_ping(self) -> str:
+        # Envia mensagem PING para medir RTT e manter conexão ativa
+        msg_id = str(uuid.uuid4())  # Gera um ID único para a mensagem
+
         msg_ping = {
             "type": "PING",
             "msg_id": msg_id,
             "timestamp": datetime.utcnow().isoformat() + "Z",
             "ttl": 1
         }
-        
-        self._envia_queue.put(msg_ping) # Coloca a mensagem na fila de envio
+
+        self._envia_queue.put(msg_ping)  # Coloca a mensagem na fila de envio
         logger.debug(f"[PeerConnection] Enviando PING para {self.peer_id_remoto}")
-        return msg_id
+        return msg_id  # Retorna msg_id para KeepAlive rastrear
     
     def _envia_pong(self, msg_ping: Dict[str, Any]): # Envia resposta PONG para um PING recebido
         msg_pong = {
@@ -317,46 +318,45 @@ class PeerConnection:
         
         
     def _processa_msg_recebida(self, msg: Dict[str, Any]):
-        
+        # Roteia mensagens recebidas para os handlers apropriados baseado no tipo
         msg_type = msg.get("type")
-        
+
         try:
             if msg_type == "PING":
-                self._envia_pong(msg)
+                self._envia_pong(msg)  # Responde com PONG
             elif msg_type == "PONG":
-                self._processa_pong(msg)
+                self._processa_pong(msg)  # Calcula RTT e reseta falhas
             elif msg_type == "BYE":
-                self._envia_bye_ok(msg)
+                self._envia_bye_ok(msg)  # Responde BYE_OK e fecha conexão
             elif msg_type == "BYE_OK":
-                self._processa_bye_ok(msg)
+                self._processa_bye_ok(msg)  # Fecha conexão
             elif msg_type == "SEND":
-                self._processa_send(msg)
+                self._processa_send(msg)  # Delega para MessageRouter
             elif msg_type == "ACK":
-                self._processa_ack(msg)
+                self._processa_ack(msg)  # Delega para MessageRouter
             elif msg_type == "PUB":
-                self._processa_pub(msg)
+                self._processa_pub(msg)  # Delega para MessageRouter
             else:
                 logger.warning(f"[PeerConnection] Mensagem desconhecida recebida de {self.peer_id_remoto}: {msg}")
-                
+
         except Exception as e:
             logger.error(f"[PeerConnection] Erro ao processar mensagem de {self.peer_id_remoto}: {e}")
 
 
     # Public API para enfileirar mensagens (usado por MessageRouter)
     def enqueue_msg(self, msg: Dict[str, Any]):
-        """Coloca mensagem na fila de envio (thread-safe)."""
+        # Coloca mensagem na fila de envio (thread-safe) - usado por MessageRouter
         self._envia_queue.put(msg)
 
     def _processa_send(self, msg: Dict[str, Any]):
-        """Processa uma mensagem SEND recebida: entrega ao router/app e
-        envia ACK se necessário (delegando ao MessageRouter se existir)."""
+        # Processa mensagem SEND recebida: delega para MessageRouter que enviará ACK se necessário
         try:
             router = self.state.get_message_router()
             if router:
-                router.process_incoming(msg, self)
+                router.process_incoming(msg, self)  # MessageRouter cuida de ACK e callbacks
                 return
 
-            # Fallback: entregar localmente e enviar ACK se necessário
+            # Fallback: entregar localmente e enviar ACK se necessário (caso MessageRouter não exista)
             src = msg.get("src")
             payload = msg.get("payload")
             logger.info(f"[PeerConnection] SEND recebido de {src}: {payload}")
@@ -376,22 +376,25 @@ class PeerConnection:
             logger.exception("[PeerConnection] Erro ao processar SEND")
 
     def _processa_ack(self, msg: Dict[str, Any]):
+        # Processa mensagem ACK recebida: delega para MessageRouter desbloquear thread aguardando
         try:
             router = self.state.get_message_router()
             if router:
-                router.process_incoming(msg, self)
+                router.process_incoming(msg, self)  # MessageRouter desbloqueará Event.wait() no send()
             else:
                 logger.info(f"[PeerConnection] ACK recebido: {msg}")
         except Exception:
             logger.exception("[PeerConnection] Erro ao processar ACK")
 
     def _processa_pub(self, msg: Dict[str, Any]):
+        # Processa mensagem PUB recebida: delega para MessageRouter notificar callbacks
         try:
             router = self.state.get_message_router()
             if router:
-                router.process_incoming(msg, self)
+                router.process_incoming(msg, self)  # MessageRouter chama callbacks registrados
                 return
 
+            # Fallback: apenas loga (caso MessageRouter não exista)
             src = msg.get("src")
             payload = msg.get("payload")
             logger.info(f"[PeerConnection] PUB recebido de {src}: {payload}")
