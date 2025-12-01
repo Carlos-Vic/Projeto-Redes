@@ -284,13 +284,7 @@ class P2PClient:
         porta = peer_info.get("port")
         peer_id_remoto = f"{peer_info['name']}@{peer_info['namespace']}"
 
-        # Se o IP público do peer remoto é o mesmo que o nosso, estamos na mesma rede.
-        # Usamos 127.0.0.1 para permitir testes na mesma máquina (NAT loopback).
-        if self.state.public_ip and ip_remoto == self.state.public_ip:
-            logger.info(f"[P2PClient] Peer {peer_id_remoto} está na mesma rede. Usando 127.0.0.1 para conexão.")
-            ip_conexao = "127.0.0.1"
-        else:
-            ip_conexao = ip_remoto
+        ip_conexao = ip_remoto
 
         max_tentativas = self.state.get_config("peer_connection", "retry_attempts")
         backoff_base = self.state.get_config("peer_connection", "backoff_base")
