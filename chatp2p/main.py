@@ -1,3 +1,14 @@
+"""
+Chat P2P - Sistema de Chat Peer-to-Peer
+Disciplina: Redes de Computadores
+Universidade de Brasília (UnB)
+
+Grupo 7:
+    - Carlos Victor Albuquerque Oliveira - 232009558
+    - Lucas Sena de Almeida - 190112310
+    - Wilianne Quaresma Paixão - 190134127
+"""
+
 from cli import CLI
 import os
 import sys
