@@ -10,7 +10,7 @@
 
     "network": {
         "ack_timeout": 5,
-        "connection_timeout": 10,
+        "connection_timeout": 60,
         "max_msg_size": 32768
     },
 
