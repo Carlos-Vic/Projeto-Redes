@@ -64,21 +64,43 @@ class CLI:
         try:
             # Inicializa o estado
             self.state = State(self.config_path)
-            
-            # Pede ao usuário as informações do peer
-            namespace = input("Digite o namespace: ").strip()
-            if not namespace:
-                print("Namespace não pode ser vazio.")
-                return
-            
-            name = input("Digite seu nome: ").strip()
-            if not name:
-                print("Nome não pode ser vazio.")
-                return
-            
-            porta = int(input("Digite a porta para escutar (ex: 5000): "))
 
-            # Loop para validar TTL até que seja válido
+            # Validação do namespace (até 64 caracteres, não pode ser vazio)
+            while True:
+                namespace = input("Digite o namespace (max 64 caracteres): ").strip()
+                if not namespace:
+                    print("ERRO: Namespace não pode ser vazio.")
+                    continue
+                if len(namespace) > 64:
+                    print("ERRO: Namespace deve ter no máximo 64 caracteres.")
+                    continue
+                break  # Namespace válido
+
+            # Validação do name (até 64 caracteres, não pode ser vazio)
+            while True:
+                name = input("Digite seu nome (max 64 caracteres): ").strip()
+                if not name:
+                    print("ERRO: Nome não pode ser vazio.")
+                    continue
+                if len(name) > 64:
+                    print("ERRO: Nome deve ter no máximo 64 caracteres.")
+                    continue
+                break  # Nome válido
+
+            # Validação da porta (1-65535)
+            while True:
+                try:
+                    porta_input = input("Digite a porta para escutar (1 - 65535): ").strip()
+                    porta = int(porta_input)
+                    if porta < 1 or porta > 65535:
+                        print("ERRO: Porta deve estar entre 1 e 65535.")
+                        continue
+                    break  # Porta válida
+                except ValueError:
+                    print("ERRO: Porta deve ser um número inteiro.")
+                    continue
+
+            # Validação do TTL (1-86400 segundos, padrão 7200)
             threshold = self.state.get_config("rendezvous", "ttl_warning_treshold")
             ttl_minimo = threshold * 2
 
@@ -95,21 +117,26 @@ class CLI:
                     print("ERRO: TTL deve ser um número inteiro.")
                     continue
 
-                # Validação: TTL deve ser maior que 2x o threshold para evitar loop de re-registro
+                # Validação da especificação: TTL deve estar entre 1 e 86400
+                if ttl < 1 or ttl > 86400:
+                    print("ERRO: TTL deve estar entre 1 e 86400 segundos.")
+                    continue
+
+                # Validação adicional: TTL deve ser maior que 2x o threshold para evitar loop de re-registro
                 if ttl <= ttl_minimo:
-                    print(f"ERRO: TTL deve ser maior que {ttl_minimo} segundos (2x o threshold de re-registro)")
+                    print(f"AVISO: TTL deve ser maior que {ttl_minimo} segundos (2x o threshold de re-registro)")
                     print(f"Por favor, escolha TTL > {ttl_minimo}s ou deixe vazio para padrão (7200s)")
-                    # Loop continua, pede novamente
-                else:
-                    break  # TTL válido, sai do loop
+                    continue
+
+                break  # TTL válido
 
             self.state.set_peer_info(name, namespace, porta, ttl) # Define as informações do peer no estado
-            
+
             # Mostra as informações definidas
             print(f"Peer ID definido como: {self.state.get_peer_info()}")
             print(f"Porta definida como: {self.state.port}")
             print(f"TTL definida como: {self.state.ttl} segundos")
-        
+
         except Exception as e:
             print(f"Falha ao configurar o estado: {e}")
         
