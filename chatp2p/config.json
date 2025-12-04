@@ -1,6 +1,6 @@
 {
     "rendezvous": {
-        "host": "pyp2p.mfcaetano.cc",
+        "host": "127.0.0.1",
         "port": 8080,
         "discover_interval": 60,
         "register_retry_attempts": 3,
@@ -29,7 +29,7 @@
     },
 
     "logging": {
-        "level": "DEBUG",
+        "level": "INFO",
         "log_to_file": true,
         "file": "chatp2p.log"
     }
