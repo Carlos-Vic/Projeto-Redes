@@ -2,14 +2,43 @@
 
 Sistema de chat P2P desenvolvido em Python que permite comunicação direta entre usuários. Utiliza um Servidor Rendezvous para descoberta de peers, mas toda a comunicação ocorre diretamente peer-to-peer.
 
+**Projeto Final de Redes de Computadores - UnB (2025.2)**
+
+Este projeto foi desenvolvido como trabalho final da disciplina de Redes de Computadores da Universidade de Brasília (UnB) no semestre 2025.2. O Servidor Rendezvous foi implementado pelo professor da disciplina e está disponível em: https://github.com/mfcaetano/pyp2p-rdv
+
 ## Grupo 7
-- Carlos Victor Albuquerque Oliveira - 232009558
-- Lucas Sena de Almeida - 190112310
-- Wilianne Quaresma Paixão - 190134127
+- Carlos Victor Albuquerque Oliveira
+- Lucas Sena de Almeida
+- Wilianne Quaresma Paixão
 
 ---
 
-## 🚀 Como Usar
+##  Funcionalidades
+
+Este cliente P2P implementa o protocolo completo de comunicação peer-to-peer:
+
+- **HELLO/HELLO_OK** - Handshake inicial entre peers
+- **PING/PONG** - Keep-alive automático (a cada 30s) com cálculo de RTT
+- **SEND/ACK** - Mensagens diretas com confirmação de recebimento
+- **PUB** - Broadcast global (`*`) ou por namespace (`#namespace`)
+- **BYE/BYE_OK** - Encerramento gracioso de conexões
+- **Reconexão automática** - Tentativas com backoff exponencial em caso de falha
+- **Descoberta periódica** - Atualização automática da lista de peers a cada 60s
+
+---
+
+##  Como Funciona
+
+1. **Registro**: Peer se registra no Servidor Rendezvous com seu `peer_id` (`nome@namespace`), IP, porta e TTL
+2. **Descoberta**: Peer solicita periodicamente a lista de peers ativos no Rendezvous
+3. **Conexão**: Estabelece conexões TCP diretas com cada peer descoberto (handshake HELLO/HELLO_OK)
+4. **Comunicação**: Troca mensagens diretamente com outros peers (sem passar pelo Rendezvous)
+5. **Keep-alive**: Mantém conexões ativas enviando PING/PONG a cada 30 segundos
+6. **Encerramento**: Ao sair, envia BYE para todos os peers e desregistra do Rendezvous
+
+---
+
+##  Como Usar
 
 ### 1. Clonar o Repositório
 
@@ -69,7 +98,7 @@ Use, por exemplo:
 
 ---
 
-## 📝 Comandos Disponíveis
+##  Comandos Disponíveis
 
 | Comando | Descrição |
 |---------|-----------|
@@ -87,7 +116,7 @@ Use, por exemplo:
 
 ---
 
-## ⚙️ Configuração
+##  Configuração
 
 O arquivo `chatp2p/config.json` contém as configurações do sistema.
 
@@ -106,23 +135,26 @@ O arquivo `chatp2p/config.json` contém as configurações do sistema.
 
 ---
 
-## 📦 Estrutura do Projeto
+##  Arquitetura do Código
 
 ```
-Projeto-Redes/
-├── chatp2p/              # Cliente P2P
-│   ├── main.py           # Ponto de entrada
-│   ├── cli.py            # Interface CLI
-│   ├── config.json       # Configurações
-│   └── ...
-└── pyp2p-rdv-main/       # Servidor Rendezvous
-    └── src/rendezvous/
-        └── main.py       # Servidor
+chatp2p/
+├── main.py                     # Inicialização da aplicação
+├── cli.py                      # Interface de linha de comando
+├── p2p_client.py               # Orquestração do cliente P2P
+├── rendezvous_connection.py    # Comunicação com servidor Rendezvous
+├── peer_server.py              # Servidor TCP para conexões inbound
+├── peer_connection.py          # Gerenciamento de conexões TCP peer-to-peer
+├── message_router.py           # Roteamento de mensagens SEND/PUB
+├── keep_alive.py               # Keep-alive (PING/PONG) e cálculo de RTT
+├── state.py                    # Estado compartilhado entre threads
+├── logger.py                   # Configuração de logging
+└── config.json                 # Configurações do sistema
 ```
 
 ---
 
-## 🎯 Exemplo de Uso
+##  Exemplo de Uso
 
 ### Terminal 1 - Servidor Rendezvous
 ```bash
@@ -158,7 +190,7 @@ chatp2p> [alice@CIC] Olá Bob!
 
 ---
 
-## 📚 Requisitos
+##  Requisitos
 
 - Python 3.8+
 - Sistema operacional: Linux/Windows (testado em WSL)
